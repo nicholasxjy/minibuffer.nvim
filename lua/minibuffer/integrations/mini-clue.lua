@@ -48,7 +48,7 @@ local function clues_to_lines()
   end
 
   local function build_cell(clue)
-    local key = clue.next_key
+    local key = clue.next_key:gsub("%s+$", "")
     local separator = ": "
     local available = cell_width - vim.fn.strdisplaywidth(key .. separator)
     local desc = truncate(clue.desc, available)
