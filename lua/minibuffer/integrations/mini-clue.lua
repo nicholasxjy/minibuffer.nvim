@@ -23,21 +23,69 @@ end
 local function clues_to_lines()
   local keys = helpers.query_to_keys(helpers.state.query)
   local content = helpers.clues_to_buffer_content(helpers.state.clues, keys)
+  local cell_width = 20
+  local spacing = 3
+  local num_cols = math.max(
+    1,
+    math.floor((vim.o.columns + spacing) / (cell_width + spacing))
+  )
+  local box_height = math.max(math.ceil(#content / num_cols), 1)
   local lines = {}
 
-  for _, clue in ipairs(content) do
-    lines[#lines + 1] = {
+  local function truncate(text, width)
+    if vim.fn.strdisplaywidth(text) <= width then
+      return text
+    end
+    local result = ""
+    for index = 0, vim.fn.strchars(text) - 1 do
+      local char = vim.fn.strcharpart(text, index, 1)
+      if vim.fn.strdisplaywidth(result .. char .. "…") > width then
+        break
+      end
+      result = result .. char
+    end
+    return width > 0 and result .. "…" or ""
+  end
+
+  local function build_cell(clue)
+    local key = " " .. clue.next_key
+    local separator = " │ "
+    local available = cell_width - vim.fn.strdisplaywidth(key .. separator)
+    local desc = truncate(clue.desc, available)
+
+    local chunks = {
       {
-        text = " " .. clue.next_key,
+        text = key,
         hl = clue.has_postkeys and "MiniClueNextKeyWithPostkeys"
           or "MiniClueNextKey",
       },
-      { text = " │ ", hl = "MiniClueSeparator" },
+      { text = separator, hl = "MiniClueSeparator" },
       {
-        text = clue.desc,
+        text = desc,
         hl = clue.is_group and "MiniClueDescGroup" or "MiniClueDescSingle",
       },
     }
+    local width = vim.fn.strdisplaywidth(key .. separator .. desc)
+    if width < cell_width then
+      chunks[#chunks + 1] = { text = string.rep(" ", cell_width - width) }
+    end
+    return chunks
+  end
+
+  for line = 1, box_height do
+    local chunks = {}
+    for col = 1, num_cols do
+      local clue = content[(col - 1) * box_height + line]
+      if col > 1 then
+        chunks[#chunks + 1] = { text = string.rep(" ", spacing) }
+      end
+      if clue then
+        vim.list_extend(chunks, build_cell(clue))
+      else
+        chunks[#chunks + 1] = { text = string.rep(" ", cell_width) }
+      end
+    end
+    lines[#lines + 1] = chunks
   end
 
   return lines
@@ -48,7 +96,7 @@ function M.show(same_content)
     return M.hide()
   end
 
-  if display and not display.closed and same_content then
+  if display and not display.closed and same_content == true then
     return
   end
 
