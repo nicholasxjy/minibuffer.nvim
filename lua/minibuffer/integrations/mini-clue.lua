@@ -23,7 +23,7 @@ end
 local function clues_to_lines()
   local keys = helpers.query_to_keys(helpers.state.query)
   local content = helpers.clues_to_buffer_content(helpers.state.clues, keys)
-  local cell_width = 20
+  local cell_width = 30
   local spacing = 3
   local num_cols = math.max(
     1,
