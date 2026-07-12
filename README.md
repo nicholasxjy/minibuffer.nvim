@@ -167,6 +167,18 @@ local picker_ui = require("fff.picker_ui")
 picker_ui.open = require("minibuffer.integrations.fff")
 ```
 
+## Snacks.nvim picker
+
+This integration currently supports the `smart` and `buffers` pickers.
+
+```lua
+-- NOTE: after loading and setting up Snacks.nvim
+require("minibuffer.integrations.snacks-picker").setup()
+
+Snacks.picker.smart()
+Snacks.picker.buffers()
+```
+
 ## mini-pick.nvim
 
 <img width="2538" height="1333" alt="mini-pick-integration" src="https://github.com/user-attachments/assets/eec8c0f3-fc71-46ae-ba3e-bdbaceb4188c" />
