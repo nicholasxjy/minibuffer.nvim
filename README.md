@@ -131,6 +131,20 @@ These integrations are mostly for demonstration purposes as proper
 support will best happen inside each plugin themselves. Changes to each
 plugin repo could break the integration.
 
+## mini.clue
+
+```lua
+-- NOTE: set up the integration before calling `mini.clue.setup()`
+local miniclue = require("mini.clue")
+require("minibuffer.integrations.mini-clue").setup()
+
+miniclue.setup({
+  triggers = {
+    { mode = { "n", "x" }, keys = "<Leader>" },
+  },
+})
+```
+
 ## Which-key.nvim
 
 <img width="2534" height="1333" alt="which-key-integration" src="https://github.com/user-attachments/assets/636e0026-4e17-4bc8-9535-396fccb256fc" />
