@@ -47,25 +47,38 @@ local function clues_to_lines()
     return width > 0 and result .. "…" or ""
   end
 
+  local max_key_width = 0
+  for _, clue in ipairs(content) do
+    local key = clue.next_key:gsub("%s+$", "")
+    local w = vim.fn.strdisplaywidth(key)
+    if w > max_key_width then
+      max_key_width = w
+    end
+  end
+
   local function build_cell(clue)
     local key = clue.next_key:gsub("%s+$", "")
     local separator = ": "
-    local available = cell_width - vim.fn.strdisplaywidth(key .. separator)
+    local key_width = vim.fn.strdisplaywidth(key)
+    local padding = string.rep(" ", max_key_width - key_width)
+    local available = cell_width - (max_key_width + 1 + vim.fn.strdisplaywidth(separator))
     local desc = truncate(clue.desc, available)
 
     local chunks = {
+      { text = padding },
       {
         text = key,
         hl = clue.has_postkeys and "MiniClueNextKeyWithPostkeys"
           or "MiniClueNextKey",
       },
+      { text = " " },
       { text = separator, hl = "MiniClueSeparator" },
       {
         text = desc,
         hl = clue.is_group and "MiniClueDescGroup" or "MiniClueDescSingle",
       },
     }
-    local width = vim.fn.strdisplaywidth(key .. separator .. desc)
+    local width = max_key_width + 1 + vim.fn.strdisplaywidth(separator .. desc)
     if width < cell_width then
       chunks[#chunks + 1] = { text = string.rep(" ", cell_width - width) }
     end
