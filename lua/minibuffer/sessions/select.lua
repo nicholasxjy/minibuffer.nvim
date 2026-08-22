@@ -15,6 +15,100 @@ local function win_state_is_valid(conf)
     and vim.api.nvim_win_is_valid(conf.win)
 end
 
+---@param keys minibuffer.config.Keymap|nil
+---@param callback fun(key:string)
+local function each_key(keys, callback)
+  if type(keys) == "string" then
+    callback(keys)
+    return
+  end
+  for _, key in ipairs(keys or {}) do
+    callback(key)
+  end
+end
+
+---@param keymaps minibuffer.config.select.keymaps
+---@param multi boolean
+local function validate_keymaps(keymaps, multi)
+  local actions = { "cancel", "accept", "previous", "next", "delete_word" }
+  if multi then
+    actions[#actions + 1] = "toggle"
+    actions[#actions + 1] = "toggle_all"
+  end
+
+  local validation_buf = vim.api.nvim_create_buf(false, true)
+  local ok, err = pcall(function()
+    local assigned = {}
+    local mapping_id = 0
+    for _, action in ipairs(actions) do
+      each_key(keymaps[action], function(key)
+        mapping_id = mapping_id + 1
+        local desc = "minibuffer-keymap-validation-" .. mapping_id
+        vim.keymap.set("i", key, "<Nop>", { buf = validation_buf, desc = desc })
+
+        for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(validation_buf, "i")) do
+          if mapping.desc == desc then
+            local existing = assigned[mapping.lhs]
+            if existing and existing ~= action then
+              error(
+                ("Select keymap %q is assigned to both %q and %q"):format(
+                  key,
+                  existing,
+                  action
+                )
+              )
+            end
+            assigned[mapping.lhs] = action
+            break
+          end
+        end
+      end)
+    end
+  end)
+  vim.api.nvim_buf_delete(validation_buf, { force = true })
+  if not ok then
+    error(err, 0)
+  end
+end
+
+---@param keymaps minibuffer.config.select.keymaps
+---@return minibuffer.core.SelectFooterFn
+local function create_default_footer(keymaps)
+  ---@param keys minibuffer.config.Keymap|nil
+  ---@return string|nil
+  local function first_key(keys)
+    local key = type(keys) == "table" and keys[1] or keys
+    if type(key) ~= "string" then
+      return nil
+    end
+    return key:match("^<(.+)>$") or key
+  end
+
+  return function(ctx)
+    local hints = {}
+    local function add_hint(keys, action)
+      local key = first_key(keys)
+      if key then
+        hints[#hints + 1] = key .. " " .. action
+      end
+    end
+
+    if ctx.multi then
+      add_hint(keymaps.toggle, "toggle")
+      add_hint(keymaps.toggle_all, "toggle-all")
+    end
+    add_hint(keymaps.accept, "accept")
+    add_hint(keymaps.next, "next")
+    add_hint(keymaps.previous, "prev")
+
+    local suffix = #hints > 0 and " " .. table.concat(hints, ", ") or ""
+    return {
+      { #ctx.items .. " items", "Normal" },
+      { suffix, "Comment" },
+    }
+  end
+end
+
 ---@class minibuffer.core.SelectContext
 ---The current list of items
 ---@field items any[]
@@ -37,6 +131,7 @@ end
 
 ---@class minibuffer.core.SelectSession : minibuffer.core.Session
 ---@field prompt string
+---@field initial_text string
 ---@field max_height integer
 ---@field multi boolean
 ---@field dynamic_height boolean
@@ -44,6 +139,7 @@ end
 ---@field filter_fn minibuffer.core.SelectFilterFn
 ---@field footer_fn minibuffer.core.SelectFooterFn|nil
 ---@field format_fn minibuffer.core.FormatFn
+---@field keymaps minibuffer.config.select.keymaps
 ---@field on_start minibuffer.core.SelectStartCallback|nil
 ---@field on_accept minibuffer.core.SelectAcceptCallback|nil
 ---@field on_cancel minibuffer.core.CancelCallback|nil
@@ -68,6 +164,7 @@ SelectSession = SelectSession
 ---@field resumable boolean|nil
 ---The prompt string to display to the user
 ---@field prompt string|nil
+---@field initial_text string|nil
 ---The max height the minibuffer can grow to
 ---@field max_height integer|nil
 ---Whether the user will be allowed to select multiple items
@@ -83,6 +180,7 @@ SelectSession = SelectSession
 ---The function used to generate the footer text in the window
 ---@field footer_fn minibuffer.core.SelectFooterFn|nil
 ---The callback called when the session is started
+---@field keymaps minibuffer.config.select.keymaps|nil
 ---@field on_start minibuffer.core.SelectStartCallback|nil
 ---The callback called when the user accepts their selection(s)
 ---@field on_accept minibuffer.core.SelectAcceptCallback
@@ -98,21 +196,30 @@ SelectSession = SelectSession
 ---@return minibuffer.core.SelectSession
 function SelectSession.new(opts)
   opts = opts or {}
+  local select_config = config.select
+  local multi = opts.multi == true
+  local keymaps = vim.tbl_deep_extend(
+    "force",
+    select_config.keymaps,
+    opts.keymaps or {}
+  )
+  local max_height = opts.max_height ~= nil and opts.max_height or select_config.max_height
+  local dynamic_height = opts.dynamic_height
+  if dynamic_height == nil then
+    dynamic_height = select_config.dynamic_height
+  end
+  validate_keymaps(keymaps, multi)
   local self = setmetatable({
     prompt = opts.prompt or "Select: ",
-    max_height = opts.max_height or 15,
-    multi = opts.multi == true,
-    dynamic_height = opts.dynamic_height == true,
+    initial_text = opts.initial_text or "",
+    max_height = max_height,
+    multi = multi,
+    dynamic_height = dynamic_height,
     fetch_fn = opts.fetch_fn,
     filter_fn = opts.filter_fn,
     format_fn = opts.format_fn,
-    footer_fn = opts.footer_fn or function(ctx)
-      local prefix = ctx.multi and " C-x toggle, C-a toggle-all," or ""
-      return {
-        { #ctx.items .. " items", "Normal" },
-        { prefix .. " C-y accept, C-n next, C-p prev", "Comment" },
-      }
-    end,
+    footer_fn = opts.footer_fn or create_default_footer(keymaps),
+    keymaps = keymaps,
     on_start = opts.on_start,
     on_accept = opts.on_accept,
     on_cancel = opts.on_cancel,
@@ -122,7 +229,7 @@ function SelectSession.new(opts)
     _closed = true,
     _entry = { buf = nil, win = nil },
     _display = { buf = nil, win = nil },
-    _input = "",
+    _input = opts.initial_text or "",
     _items = {},
     _current_index = 1,
     _selected_indices = {},
@@ -209,9 +316,6 @@ function SelectSession:pre_start()
   vim.bo[self._entry.buf].buftype = "prompt"
   vim.bo[self._entry.buf].complete = ""
   vim.fn.prompt_setprompt(self._entry.buf, self.prompt)
-  vim.fn.prompt_setcallback(self._entry.buf, function(_)
-    self:accept()
-  end)
   self._entry.win = vim.api.nvim_open_win(self._entry.buf, false, {
     relative = "editor",
     width = vim.o.columns,
@@ -329,40 +433,36 @@ function SelectSession:post_start()
     return state.session == self
   end, { buf = self._entry.buf, nowait = true, silent = true, noremap = true })
 
-  keyset("i", "<Esc>", function()
+  ---@param rhs string|function
+  local function set_keymaps(keys, rhs)
+    each_key(keys, function(key)
+      keyset("i", key, rhs)
+    end)
+  end
+
+  -- Prompt buffers consume an unmapped <CR>, clearing the current query.
+  keyset("i", "<CR>", function() end)
+  set_keymaps(self.keymaps.cancel, function()
     self:cancel()
   end)
-  keyset("i", "<CR>", function()
+  set_keymaps(self.keymaps.accept, function()
     self:accept()
   end)
-  keyset("i", "<C-y>", function()
-    self:accept()
-  end)
-  keyset("i", "<Up>", function()
+  set_keymaps(self.keymaps.previous, function()
     self:move(-1)
   end)
-  keyset("i", "<Down>", function()
+  set_keymaps(self.keymaps.next, function()
     self:move(1)
   end)
-  keyset("i", "<C-p>", function()
-    self:move(-1)
+  set_keymaps(self.keymaps.delete_word, function()
+    vim.api.nvim_feedkeys(vim.keycode("<C-S-w>"), "ni", false)
   end)
-  keyset("i", "<C-n>", function()
-    self:move(1)
-  end)
-  keyset("i", "<S-Tab>", function()
-    self:move(-1)
-  end)
-  keyset("i", "<Tab>", function()
-    self:move(1)
-  end)
-  keyset("i", "<C-w>", "<C-S-w>")
 
   if self.multi then
-    keyset("i", "<C-x>", function()
+    set_keymaps(self.keymaps.toggle, function()
       self:toggle_selection()
     end)
-    keyset("i", "<C-a>", function()
+    set_keymaps(self.keymaps.toggle_all, function()
       self:toggle_selection_all()
     end)
   end

@@ -12,8 +12,10 @@ local severity_hls = {
   [vim.diagnostic.severity.HINT] = "DiagnosticHint",
 }
 
-local function gather_diagnostics(scope)
-  local diagnostics = scope == "buffer" and vim.diagnostic.get(0) or vim.diagnostic.get()
+local function gather_diagnostics(scope, opts)
+  local diagnostic_opts = opts.severity and { severity = opts.severity } or nil
+  local diagnostics = scope == "buffer" and vim.diagnostic.get(0, diagnostic_opts)
+    or vim.diagnostic.get(nil, diagnostic_opts)
 
   local items = {}
   for _, diag in ipairs(diagnostics) do
@@ -27,6 +29,21 @@ local function gather_diagnostics(scope)
       source = diag.source or "",
       message = diag.message:gsub("\n", " "),
     }
+  end
+
+  if opts.severity_sort then
+    table.sort(items, function(a, b)
+      if a.severity ~= b.severity then
+        return a.severity < b.severity
+      end
+      if a.file ~= b.file then
+        return a.file < b.file
+      end
+      if a.lnum ~= b.lnum then
+        return a.lnum < b.lnum
+      end
+      return a.col < b.col
+    end)
   end
 
   return items
@@ -81,21 +98,24 @@ end
 
 ---@class minibuffer.builtin.DiagnosticsOpts
 ---@field scope? "buffer"|"workspace"
+---@field severity? vim.diagnostic.SeverityFilter
+---@field severity_sort? boolean
 
 ---@param opts? minibuffer.builtin.DiagnosticsOpts
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = vim.tbl_deep_extend("force", { scope = "workspace" }, opts or {})
-  local diagnostics = gather_diagnostics(opts.scope)
+  opts = vim.tbl_deep_extend("force", {
+    scope = "workspace",
+    severity_sort = false,
+  }, opts or {})
+  local diagnostics = gather_diagnostics(opts.scope, opts)
 
   require("minibuffer").select({
     resumable = true,
     prompt = opts.scope == "buffer" and "Buffer Diagnostics: "
       or "Workspace Diagnostics: ",
     multi = false,
-    dynamic_height = false,
-    max_height = 15,
     fetch_fn = function(_, cb)
       cb(diagnostics)
     end,

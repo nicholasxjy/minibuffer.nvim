@@ -4,9 +4,15 @@
 ---@field dynamic_height boolean
 ---@field max_height integer
 
+---@class minibuffer.internal_config.select
+---@field dynamic_height boolean
+---@field max_height integer
+---@field keymaps minibuffer.config.select.keymaps
+
 ---@class minibuffer.Config
 ---@field dynamic_window_resize boolean
 ---@field cmd minibuffer.cmd.Config
+---@field select minibuffer.internal_config.select
 
 ---@type minibuffer.Config
 local default_config = {
@@ -16,6 +22,19 @@ local default_config = {
     autotrigger = true,
     dynamic_height = false,
     max_height = 15,
+  },
+  select = {
+    dynamic_height = false,
+    max_height = 15,
+    keymaps = {
+      cancel = "<Esc>",
+      accept = { "<C-y>", "<CR>" },
+      previous = { "<C-p>", "<Up>", "<S-Tab>" },
+      next = { "<C-n>", "<Down>", "<Tab>" },
+      delete_word = "<C-w>",
+      toggle = "<C-x>",
+      toggle_all = "<C-a>",
+    },
   },
 }
 

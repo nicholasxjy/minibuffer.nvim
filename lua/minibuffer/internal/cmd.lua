@@ -16,6 +16,7 @@ local M = {}
 ---@field selected integer Zero-based selected completion index, or -1 when nothing is selected.
 ---@field commands table<string, vim.api.keyset.command_info> Command info
 ---@field cmdheight integer The value that cmdheight should currently be set to
+---@field keymaps table<string, function> Command-line mappings installed by this module.
 
 ---@type minibuffer.internal.cmd.State
 local s = {
@@ -28,6 +29,7 @@ local s = {
   selected = -1,
   commands = {},
   cmdheight = vim.o.cmdheight,
+  keymaps = {},
 }
 
 ---@return boolean
@@ -265,9 +267,36 @@ function M.enable()
     ext_popupmenu = true,
   }, on_event)
 
+  local function set_keymap(lhs, rhs)
+    if next(vim.fn.maparg(lhs, "c", false, true)) ~= nil then
+      return
+    end
+
+    vim.keymap.set("c", lhs, rhs, {
+      expr = true,
+      nowait = true,
+      silent = true,
+      noremap = true,
+    })
+    s.keymaps[lhs] = rhs
+  end
+
+  local function map_selection(lhs, rhs)
+    set_keymap(lhs, function()
+      if vim.fn.wildmenumode() == 0 then
+        return lhs
+      end
+
+      return rhs
+    end)
+  end
+
+  map_selection("<C-j>", "<C-n>")
+  map_selection("<C-k>", "<C-p>")
+
   if config.cmd.autotrigger then
     -- Accept the current completion and immediately trigger the next one.
-    vim.keymap.set("c", "<C-y>", function()
+    set_keymap("<C-y>", function()
       if vim.fn.wildmenumode() == 0 then
         return "<C-y>"
       end
@@ -281,12 +310,7 @@ function M.enable()
       end)
 
       return ""
-    end, {
-      expr = true,
-      nowait = true,
-      silent = true,
-      noremap = true,
-    })
+    end)
   end
 end
 
@@ -301,7 +325,15 @@ function M.disable()
 
   vim.ui_detach(state.ns)
 
-  local _, _ = pcall(vim.keymap.del, "c", "<C-y>")
+  for lhs, rhs in pairs(s.keymaps) do
+    for _, mapping in ipairs(vim.api.nvim_get_keymap("c")) do
+      if mapping.callback == rhs then
+        pcall(vim.keymap.del, "c", lhs)
+        break
+      end
+    end
+  end
+  s.keymaps = {}
 
   util.set_cmdheight(state.win_states, config.dynamic_window_resize)
 

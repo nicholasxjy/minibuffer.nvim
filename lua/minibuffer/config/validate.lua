@@ -26,6 +26,10 @@ function M.validate(config)
       config.cmd,
       "table",
     },
+    select = {
+      config.select,
+      "table",
+    },
   })
 
   if not ok then
@@ -62,6 +66,33 @@ function M.validate(config)
 
   if config.cmd.max_height % 1 ~= 0 then
     return false, "vim.g.minibuffer.cmd.max_height: expected integer"
+  end
+
+  ok, err = validate_path("vim.g.minibuffer.select", {
+    dynamic_height = {
+      config.select.dynamic_height,
+      "boolean",
+    },
+    max_height = {
+      config.select.max_height,
+      "number",
+    },
+    keymaps = {
+      config.select.keymaps,
+      "table",
+    },
+  })
+
+  if not ok then
+    return false, err
+  end
+
+  if config.select.max_height < 1 then
+    return false, "vim.g.minibuffer.select.max_height: expected positive integer"
+  end
+
+  if config.select.max_height % 1 ~= 0 then
+    return false, "vim.g.minibuffer.select.max_height: expected integer"
   end
 
   return true, nil

@@ -112,8 +112,42 @@ vim.g.minibuffer = {
     autotrigger = true, -- Display completion suggestions as you type
     dynamic_height = false, -- Whether the completion window should shrink as items disappear.
     max_height = 15, -- Maximum height when using the command line
-   },
+  },
+  select = {
+    dynamic_height = false, -- Whether the selection window should shrink as items disappear.
+    max_height = 15, -- Maximum height when using a select session
+    keymaps = {
+      -- Each action accepts one key or a list of keys. Use {} to disable an action's mappings.
+      cancel = "<Esc>",
+      accept = { "<C-y>", "<CR>" },
+      previous = { "<C-p>", "<Up>", "<S-Tab>" },
+      next = { "<C-n>", "<Down>", "<Tab>" },
+      delete_word = "<C-w>",
+      toggle = "<C-x>", -- Only active for multi-select sessions
+      toggle_all = "<C-a>", -- Only active for multi-select sessions
+    },
+  },
 }
+```
+
+In command-line completion, `<C-j>` selects the next item and `<C-k>` selects the previous
+item. Their normal command-line behavior is preserved while the completion menu is inactive.
+
+The `max_height` and `dynamic_height` options can be configured globally and overridden for
+one session through `minibuffer.select()`. Per-session values override global values. The same
+`keymaps` table can also be passed to `minibuffer.select()` to override bindings for one session;
+unspecified actions keep their global bindings. The same effective key cannot be assigned to
+multiple actions; when moving a default key to another action, remove it from its original
+action's list as well.
+
+```lua
+require("minibuffer").select({
+  keymaps = {
+    next = { "<C-j>", "<Down>" },
+    previous = { "<C-k>", "<Up>" },
+  },
+  -- ...
+})
 ```
 
 # Builtin
@@ -184,6 +218,22 @@ vim.keymap.set("n", "<leader>fq", function()
 end, { desc = "Find in quickfix" })
 ```
 
+The diagnostics picker accepts Neovim's `vim.diagnostic.SeverityFilter` and can
+sort results by severity. Lower severity values are more severe:
+
+```lua
+require("minibuffer.builtin.diagnostics")({
+  severity_sort = true,
+  severity = { max = vim.diagnostic.severity.WARN }, -- Error and Warn
+})
+
+require("minibuffer.builtin.diagnostics")({
+  severity = { min = vim.diagnostic.severity.WARN }, -- Warn, Info, and Hint
+})
+```
+
+The `severity` option also supports an exact severity or a list of severities.
+
 ## Interesting things you can do when using the minibuffer command line
 
 **Doom-emacs M-x file explorer picker**
@@ -247,12 +297,116 @@ pcall(vim.api.nvim_set_hl, 0, "WhichKeyNormal", { link = "Normal" })
 local fff_mb = require("minibuffer.integrations.fff")
 
 vim.keymap.set("n", "<leader><leader>", function()
-  fff_mb.file_search({})
+  fff_mb.file_search({ show_git_status = true })
 end, { desc = "FFFind" })
 
 vim.keymap.set("n", "<leader>/", function()
-  fff_mb.content_search({})
+  fff_mb.content_search({ show_git_status = true })
 end, { desc = "FFFGrep" })
+```
+
+The integration uses fff.nvim's icon provider and highlights fuzzy matches and
+content matches. Icons are shown when `nvim-web-devicons` or `mini.icons` is
+available. Git status indicators are disabled by default and can be enabled per
+picker with `show_git_status = true`.
+
+Content matches use Treesitter syntax highlighting by default. Disable it when
+you only want the match highlighting:
+
+```lua
+fff_mb.content_search({ treesitter = false })
+```
+
+Search paths use filename-first display by default. Set `filename_first = false`
+to display the directory before the filename:
+
+```lua
+fff_mb.file_search({ filename_first = false })
+fff_mb.content_search({ filename_first = false })
+```
+
+File search frecency scores are hidden by default. Set `show_score = true` to
+include them after the path.
+
+Highlight groups can be overridden per picker. Use a string to reuse an existing
+group, or a table to define `fg`, `bg`, and/or `link` for a picker-local group:
+
+```lua
+fff_mb.file_search({
+  show_git_status = true,
+  highlights = {
+    directory_path = { link = "Comment" },
+    matched = { fg = "#ffffff", bg = "#5f00af", bold = true },
+    git_modified = { fg = "#f59e0b" },
+    git_sign_modified = { link = "DiagnosticWarn" },
+  },
+})
+```
+
+Supported names include `normal`, `directory_path`, `matched`, `content`,
+`grep_match`, `icon`, `separator`, `score`, `git_*`, and `git_sign_*`.
+
+FFF-specific result actions accept either one key or multiple keys:
+
+```lua
+fff_mb.file_search({
+  keymaps = {
+    split = { "<C-s>", "<C-w>s" },
+    vsplit = { "<C-v>", "<C-w>v" },
+    toggle_mode = { "<C-t>", "<C-m>" },
+    next = { "<C-n>", "<Down>" },
+    previous = { "<C-p>", "<Up>" },
+  },
+})
+```
+
+`next` and `previous` replace the global minibuffer bindings for that picker,
+and also accept multiple keys. The same `keymaps` options are available for
+`content_search`.
+
+The fff backend search options are passed through unchanged. `file_search`
+supports `mode`, `max_results`, `page`, `current_file`, `max_threads`,
+`combo_boost_score_multiplier`, `min_combo_count`, `cwd`, and
+`wait_for_index_ms`. `content_search` supports `mode`, `max_file_size`,
+`max_matches_per_file`, `smart_case`, `page_size`, `file_offset`,
+`time_budget_ms`, `trim_whitespace`, `cwd`, `wait_for_index_ms`, and
+`treesitter`.
+
+Both functions accept an optional initial query as their first argument. It is
+used to prefill the minibuffer and is passed as the query to fff:
+
+```lua
+fff_mb.file_search("button", { mode = "files", max_results = 50 })
+fff_mb.content_search("TODO", { mode = "plain", page_size = 100 })
+```
+
+## Snacks.nvim picker
+
+This integration uses Snacks' own formatters and actions in the minibuffer. File
+entries use the same filename-first path layout as the FFF integration, and all
+configured Snacks picker sources (including `files`, `grep`, Git, LSP, and Vim
+sources) are exposed after setup.
+
+```lua
+-- NOTE: after loading and setting up Snacks.nvim
+require("minibuffer.integrations.snacks-picker").setup()
+
+Snacks.picker.smart()
+Snacks.picker.buffers()
+Snacks.picker.files()
+Snacks.picker.grep()
+Snacks.picker.diagnostics()
+```
+
+The source aliases `find_files`, `live_grep`, `git_commits`, `git_bcommits`, and
+`oldfiles` are also available. Source options, formatters, confirm actions, and
+input keymaps are forwarded to Snacks.
+
+The generic picker API accepts the same source and picker options:
+
+```lua
+Snacks.picker("files", { cwd = vim.fn.getcwd(), hidden = true })
+Snacks.picker.pick("grep", { cwd = vim.fn.getcwd(), live = true })
 ```
 
 ## mini-pick.nvim

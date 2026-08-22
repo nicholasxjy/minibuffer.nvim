@@ -77,8 +77,6 @@ return function()
     resumable = true,
     prompt = "Marks: ",
     multi = false,
-    dynamic_height = false,
-    max_height = 15,
     fetch_fn = function(_, cb)
       cb(marks)
     end,

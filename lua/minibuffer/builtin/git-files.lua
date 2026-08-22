@@ -43,8 +43,6 @@ return function(opts)
     resumable = true,
     prompt = "Git Files: ",
     multi = true,
-    dynamic_height = false,
-    max_height = 15,
     fetch_fn = function(_, cb)
       local g_opts = {
         "git",

@@ -120,8 +120,6 @@ return function(opts)
     resumable = true,
     prompt = "Grep: ",
     multi = true,
-    dynamic_height = false,
-    max_height = 18,
     fetch_fn = function(input, cb)
       debounce(function()
         run_grep(opts, input, cb)

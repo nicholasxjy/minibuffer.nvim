@@ -80,8 +80,6 @@ return function(opts)
     resumable = true,
     prompt = opts.type == "loclist" and "Location List: " or "Quickfix List: ",
     multi = false,
-    dynamic_height = false,
-    max_height = 15,
     fetch_fn = function(_, cb)
       cb(items)
     end,

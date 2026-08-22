@@ -37,6 +37,5 @@ return function(items, opts, on_choice)
     on_cancel = function()
       on_choice(nil, nil)
     end,
-    max_height = 20,
   })
 end

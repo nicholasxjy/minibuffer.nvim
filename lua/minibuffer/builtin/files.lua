@@ -11,15 +11,24 @@ local all_files = {} ---@type string[]
 local loading = false
 local loaded_cwd = nil
 
--- Format each file path: directory part in Comment, filename normal
-local function format_fn(item)
+-- Format each file path: filename normal, directory part in Comment
+local function format_fn(item, filename_first)
   local name = item:match("([^/]+)$") or item
   local dir = item:sub(1, #item - #name)
 
-  return {
-    { text = dir, hl = "Comment" },
-    { text = name, hl = "Normal" },
-  }
+  if filename_first == false then
+    return {
+      { text = dir, hl = "Comment" },
+      { text = name, hl = "Normal" },
+    }
+  end
+
+  local display_dir = dir ~= "" and dir:sub(1, -2) or ""
+  local result = { { text = name, hl = "Normal" } }
+  if display_dir ~= "" then
+    result[#result + 1] = { text = " " .. display_dir, hl = "Comment" }
+  end
+  return result
 end
 
 -- Use vim's fuzzy matcher
@@ -65,6 +74,7 @@ end
 ---@class minibuffer.builtin.FilesGrepOpts
 ---@field rg_opts string[]|nil
 ---@field cwd string|nil
+---@field filename_first boolean|nil
 
 ---@param opts minibuffer.builtin.FilesGrepOpts
 return function(opts)
@@ -82,6 +92,7 @@ return function(opts)
       "!.git",
     },
     cwd = nil,
+    filename_first = true,
   }
   opts = vim.tbl_deep_extend("force", default_opts, opts or {})
   opts.cwd = opts.cwd and vim.fn.fnamemodify(opts.cwd, ":p")
@@ -92,14 +103,12 @@ return function(opts)
     resumable = true,
     prompt = "Files: ",
     multi = true,
-    dynamic_height = false,
-    max_height = 15,
     fetch_fn = function(_, cb)
       debounce(function()
         load_files(opts, cb)
       end)
     end,
-    format_fn = format_fn,
+    format_fn = function(item) return format_fn(item, opts.filename_first) end,
     filter_fn = filter_fn,
     on_accept = function(selection)
       if #selection == 1 then

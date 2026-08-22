@@ -58,8 +58,6 @@ return function(opts)
     resumable = true,
     prompt = opts.type == "search" and "Search History: " or "Command History: ",
     multi = false,
-    dynamic_height = false,
-    max_height = 15,
     fetch_fn = function(_, cb)
       cb(items)
     end,

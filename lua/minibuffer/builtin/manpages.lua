@@ -110,8 +110,6 @@ return function()
     resumable = true,
     prompt = "Manpages: ",
     multi = false,
-    dynamic_height = false,
-    max_height = 15,
     format_fn = format_fn,
     filter_fn = filter_fn,
     fetch_fn = function(input, cb)

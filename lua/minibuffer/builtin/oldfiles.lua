@@ -66,8 +66,6 @@ return function(opts)
     resumable = true,
     prompt = "Oldfiles: ",
     multi = true,
-    dynamic_height = false,
-    max_height = 15,
     fetch_fn = function(_, cb)
       cb(oldfiles)
     end,
