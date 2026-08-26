@@ -94,18 +94,45 @@ end
 
 ---Format a single completion item for display.
 ---@param item minibuffer.internal.cmd.PopupItem
+---@param query string Current command-line token.
 ---@return table[] Highlighted line data.
-local function format_item(item)
+local function format_item(item, query)
   local word = item[1] or ""
   local menu = item[3] or ""
   local info = item[4] or ""
 
-  local line = {
-    {
-      text = " " .. word,
-      hl = "Normal",
-    },
-  }
+  local line = { { text = " ", hl = "Normal" } }
+  local matches = {}
+  if query ~= "" and word ~= "" then
+    local result = vim.fn.matchfuzzypos({ word }, query)
+    matches = result[2] and result[2][1] or {}
+  end
+
+  local previous_end = 0
+  for _, position in ipairs(matches) do
+    local start_col = vim.str_byteindex(word, position)
+    local end_col = vim.str_byteindex(word, position + 1)
+
+    if start_col > previous_end then
+      line[#line + 1] = {
+        text = word:sub(previous_end + 1, start_col),
+        hl = "MinibufferSuggestion",
+      }
+    end
+    line[#line + 1] = {
+      text = word:sub(start_col + 1, end_col),
+      hl = "IncSearch",
+    }
+    previous_end = end_col
+  end
+
+  if previous_end < #word then
+    line[#line + 1] = {
+      text = word:sub(previous_end + 1),
+      hl = "MinibufferSuggestion",
+    }
+  end
+
   if menu ~= "" then
     line[#line + 1] = {
       text = " - " .. menu,
@@ -147,8 +174,12 @@ local function render()
   set_height(height)
 
   local lines = {}
+  local query = vim.fn.getcmdline()
+  if vim.fn.getcmdtype() == ":" then
+    query = query:match("(%S*)$") or ""
+  end
   for _, item in ipairs(s.items) do
-    lines[#lines + 1] = format_item(item)
+    lines[#lines + 1] = format_item(item, query)
   end
   util.write_highlighted_lines(s.buf, state.ns, lines)
 
