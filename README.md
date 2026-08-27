@@ -164,6 +164,12 @@ vim.keymap.set(
 vim.keymap.set("n", "<leader>fq", function()
   require("minibuffer.builtin.list")({ type = "quickfix" })
 end, { desc = "Find in quickfix" })
+
+-- Keep Neovim's native LSP hover behavior, but show its window in the minibuffer.
+vim.lsp.buf.hover = require("minibuffer.builtin.hover")
+
+-- Native hover options are still accepted and forwarded.
+-- Example: vim.lsp.buf.hover({ border = "rounded", max_width = 80 })
 ```
 
 ## Interesting things you can do when using the minibuffer command line
@@ -233,6 +239,69 @@ else
   require("which-key").setup(opts)
 end
 ```
+
+## Snacks Picker
+
+Enable the integration after setting up [snacks.nvim](https://github.com/folke/snacks.nvim)
+and before opening the first picker:
+
+```lua
+require("snacks").setup({ picker = {} })
+require("minibuffer.integrations.snacks-picker").setup()
+```
+
+By default every picker uses the minibuffer. Set individual picker APIs to
+`false` to keep their native Snacks layout and formatter:
+
+```lua
+require("minibuffer.integrations.snacks-picker").setup({
+  pickers = {
+    explorer = false,
+    grep = false,
+  },
+})
+```
+
+Call `setup({ pickers = false })` to restore native behavior for every picker,
+or `setup({ pickers = true })` to enable the minibuffer for all of them again.
+Use the `custom` key for direct `Snacks.picker({ ... })` calls.
+
+All native picker APIs, built-in and custom sources, and per-call options remain
+available. Minibuffer only takes over the outer layout window; its height,
+preview, inner layout, actions, keys and callbacks are left to Snacks:
+
+```lua
+Snacks.picker.files({ hidden = true })
+Snacks.picker.grep()
+Snacks.picker.my_custom_source({ cwd = vim.uv.cwd() })
+Snacks.picker({ items = { { text = "custom item" } } })
+```
+
+For `files` and `smart`, the integration formats paths as
+`filename  │ directory`, aligned by the longest filename in the list, including
+filenames with wide Unicode characters:
+
+```lua
+Snacks.picker.files()
+
+Snacks.picker.smart()
+```
+
+`filename_first` is enabled automatically for these two sources; `filename_only`
+keeps its path layout, and custom formatters keep their native behavior.
+
+Enable git-aware smart results to put changed files first and show status
+highlights plus sign-column markers:
+
+```lua
+require("minibuffer.integrations.snacks-picker").setup({
+  smart = { git_status = true },
+})
+```
+
+The filename and signs use fff.nvim's `FFFGit*` and `FFFGitSign*` highlight
+groups and border markers. The default colors match [fff.nvim](https://github.com/dmtrKovalenko/fff)
+and can be overridden with the same group names.
 
 ## mini-pick.nvim
 
