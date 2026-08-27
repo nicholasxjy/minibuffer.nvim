@@ -248,33 +248,122 @@ else
 end
 ```
 
-## fzf.lua
+## fzf-lua
+
+Minibuffer provides opt-in smart-ranked `files` and `global` wrappers for
+[fzf-lua](https://github.com/ibhagwan/fzf-lua). The wrappers keep fzf-lua's
+window, preview, formatting and actions, while ranking file candidates with the
+same strategy as `Snacks.picker.smart`.
+
+This integration requires `fzf-lua` and `fzf`. The `global` wrapper requires
+`fzf >= 0.59`. `snacks.nvim` is not required.
+
+Configure fzf-lua's window as usual:
 
 ```lua
-local opts = {}
-local ok, mb_fzf = pcall(require, "minibuffer.integrations.fzf")
-if ok then
-  mb_fzf(opts)
-else
-  require("fzf-lua").setup(opts)
-end
+require("fzf-lua").setup({
+  fzf_opts = {
+    ["--no-separator"] = true,
+  },
+  winopts = function()
+    return {
+      height = 0.35,
+      width = 1,
+      row = 0.35,
+      col = 0.50,
+      border = "none",
+      backdrop = 100,
+      relative = "minibuffer",
+      use_minibuffer = true,
+      winhl = true,
+    }
+  end,
+  hls = {
+    normal = "Normal",
+  },
+})
 ```
 
-## lualine
-
-This allows the statusline to display the active statusline for the correct window when the minibuffer is opened:
+The `files` and `global` wrappers enable fzf-lua's builtin previewer hidden by
+default, with a vertical preview above the results (`up:40%`) at the top of the
+editor by default (an explicit `winopts.row` still wins). Press fzf-lua's
+default `toggle-preview` key (`<F4>` in the builtin window or `f4` in fzf) to
+open and close it. Existing `keymap.builtin` and
+`keymap.fzf` settings are preserved; add the following to your fzf-lua setup to
+use another key if needed:
 
 ```lua
-local opts = {}
-local ok, mb_lualine = pcall(require, "minibuffer.integrations.lualine")
-if ok then
-  mb_lualine(opts)
-else
-  require("lualine").setup(opts)
-end
+keymap = {
+  builtin = { ["<C-p>"] = "toggle-preview" },
+  fzf = { ["ctrl-p"] = "toggle-preview" },
+},
 ```
 
-# Custom Statusline Integration
+Then call the minibuffer integration instead of the corresponding fzf-lua
+picker:
+
+```lua
+local fzf_mb = require("minibuffer.integrations.fzf_lua")
+
+vim.keymap.set("n", "<leader><leader>", function()
+  fzf_mb.files()
+end, { desc = "Smart files" })
+
+vim.keymap.set("n", "<leader>fg", function()
+  fzf_mb.global()
+end, { desc = "Smart global" })
+```
+
+The default smart options match `Snacks.picker.smart`: filename, cwd and
+frecency bonuses are enabled, while history weighting is disabled. They can be
+overridden per call alongside normal fzf-lua options:
+
+```lua
+fzf_mb.files({
+  cwd = vim.uv.cwd(),
+  smart = {
+    filename_bonus = true,
+    cwd_bonus = true,
+    frecency = true,
+    history_bonus = false,
+    query_delay = 30,
+  },
+})
+```
+
+`fzf_mb.global()` preserves fzf-lua's global picker behavior. Its default files
+branch is smart-ranked; `$`, `@` and `#` still switch to buffers, document
+symbols and workspace symbols. Custom `global.pickers` descriptors are retained,
+with only the first unprefixed/default provider replaced.
+
+fzf remains responsible for filtering and match highlighting after candidates
+are ranked. Custom formatters, path shortening, `--nth`, or raw `--sort` flags
+can therefore further filter the ranked results or override their order.
+
+The most recently closed smart picker retains its candidate cache for up to five
+minutes so `FzfLua resume` can restart it; a new smart picker replaces that cache.
+On Windows, `query_delay` does not add the POSIX `sleep` command and rapid queries
+instead rely on fzf cancelling superseded reload processes.
+
+Frecency is stored independently under Neovim's data directory. It uses a
+30-day half-life and records visits to listed file buffers. The cwd bonus follows
+Snacks exactly, so it is a constant when every candidate belongs to the picker
+cwd; it becomes relevant when search paths include files outside that directory.
+
+The ranking module can also be used without fzf-lua:
+
+```lua
+local ranker = require("minibuffer.fuzzy").new({ cwd = "/project" })
+local ranked = ranker:rank("init", {
+  { text = "lua/minibuffer/init.lua", path = "/project/lua/minibuffer/init.lua" },
+  { text = "plugin/minibuffer.lua", path = "/project/plugin/minibuffer.lua" },
+})
+```
+
+Candidate paths should be normalized and absolute. Returned candidates contain
+their computed `score` and are ordered by score, text length and original index.
+
+# Statusline Integration
 
 You may notice that when the minibuffer is open in an interactive session (such as select or input), the 'inactive' statusline is shown.
 This is because you are focussed on the minibuffer window (which doesn't draw another statusline) and so you need to tell your statusline code which window to draw the active statusline for.
