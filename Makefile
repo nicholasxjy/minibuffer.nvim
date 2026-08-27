@@ -1,4 +1,7 @@
-.PHONY: api-doc
+.PHONY: api-doc test
+
+test:
+	@nvim --headless -u tests/minimal_init.lua -i NONE -l tests/run.lua
 
 api-doc:
 	@command -v vimcats >/dev/null 2>&1 || { \
