@@ -80,7 +80,10 @@ local function with_fake_fzf(run, fake_opts)
           opts.cb_err("source failed")
           opts.cb_finish(1)
         else
-          opts.cb_write_lines({ "foo/src.lua", "src/foo.lua" }, function() end)
+          opts.cb_write_lines(
+            fake_opts.lines or { "foo/src.lua", "src/foo.lua" },
+            function() end
+          )
         end
         if fake_opts.defer_source then
           capture.finishes[#capture.finishes + 1] = opts.cb_finish
@@ -202,6 +205,35 @@ test("fzf-lua files formats candidates once without changing match text", functi
     eq(nil, capture.opts.fn_preprocess)
     eq(nil, capture.opts.fn_postprocess)
   end)
+end)
+
+test("fzf-lua files aligns filename-first columns without changing paths", function()
+  with_fake_fzf(function(integration, capture)
+    integration.files({
+      cwd = "/repo",
+      formatter = "path.filename_first",
+      _fmt = {
+        from = function(line)
+          local filename, directory = line:match("^([^\t]+)\t(.+)$")
+          return filename and directory .. "/" .. filename or line
+        end,
+      },
+      fn_transform = function(line)
+        local directory, filename = line:match("^(.*)/([^/]+)$")
+        return filename .. "\t" .. directory
+      end,
+      smart = { cwd_bonus = false, frecency = false, query_delay = 0 },
+    })
+
+    local lines = vim.split(capture.initial({}), "\n")
+    local columns = vim.tbl_map(function(line)
+      local separator = assert(line:find("│", 1, true))
+      return vim.api.nvim_strwidth(line:sub(1, separator - 1))
+    end, lines)
+    eq(columns[1], columns[2])
+    eq("src/文.lua", capture.opts._fmt.from(lines[1]))
+    eq("lua/long_name.lua", capture.opts._fmt.from(lines[2]))
+  end, { lines = { "src/文.lua", "lua/long_name.lua" } })
 end)
 
 test("fzf-lua files does not use a POSIX debounce command on Windows", function()

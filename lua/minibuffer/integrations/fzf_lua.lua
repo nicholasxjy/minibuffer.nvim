@@ -118,6 +118,42 @@ local function candidate_path(raw, opts, cwd)
   return absolute_path(path, cwd)
 end
 
+local function align_filename_first(candidates, opts)
+  if
+    opts.formatter ~= "path.filename_first"
+    or not opts._fmt
+    or type(opts._fmt.from) ~= "function"
+  then
+    return
+  end
+
+  local width = 0
+  for _, candidate in ipairs(candidates) do
+    local filename = candidate.display:match("^(.-)\t") or candidate.display
+    width = math.max(
+      width,
+      vim.api.nvim_strwidth(FzfLua.utils.strip_ansi_coloring(filename))
+    )
+  end
+  for _, candidate in ipairs(candidates) do
+    local filename, directory = candidate.display:match("^(.-)\t(.*)$")
+    filename = filename or candidate.display
+    local padding = width
+      - vim.api.nvim_strwidth(FzfLua.utils.strip_ansi_coloring(filename))
+      + 1
+    candidate.display = filename
+      .. string.rep(" ", padding)
+      .. "│"
+      .. (directory and "\t" .. directory or "")
+  end
+
+  local from = opts._fmt.from
+  opts._fmt.from = function(line, ...)
+    line = line:gsub(" +│\t", "\t", 1):gsub(" +│$", "", 1)
+    return from(line, ...)
+  end
+end
+
 local function load_candidates(opts, callback)
   local preprocess = resolve_fn(opts.fn_preprocess)
   local transform = resolve_fn(opts.fn_transform)
@@ -193,6 +229,7 @@ local function load_candidates(opts, callback)
             transform_error or (stderr ~= "" and stderr or "file command failed")
           )
         else
+          align_filename_first(candidates, opts)
           callback(candidates)
         end
       end
