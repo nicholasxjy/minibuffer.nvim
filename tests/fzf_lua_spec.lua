@@ -129,7 +129,7 @@ local function with_fake_fzf(run, fake_opts)
       end,
       lua_regex_escape = vim.pesc,
       strip_ansi_coloring = function(line)
-        return line
+        return line, 0
       end,
     },
   }

@@ -132,14 +132,14 @@ local function align_filename_first(candidates, opts)
     local filename = candidate.display:match("^(.-)\t") or candidate.display
     width = math.max(
       width,
-      vim.api.nvim_strwidth(FzfLua.utils.strip_ansi_coloring(filename))
+      vim.api.nvim_strwidth((FzfLua.utils.strip_ansi_coloring(filename)))
     )
   end
   for _, candidate in ipairs(candidates) do
     local filename, directory = candidate.display:match("^(.-)\t(.*)$")
     filename = filename or candidate.display
     local padding = width
-      - vim.api.nvim_strwidth(FzfLua.utils.strip_ansi_coloring(filename))
+      - vim.api.nvim_strwidth((FzfLua.utils.strip_ansi_coloring(filename)))
       + 1
     candidate.display = filename
       .. string.rep(" ", padding)
