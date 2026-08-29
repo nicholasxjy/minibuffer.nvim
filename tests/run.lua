@@ -30,6 +30,7 @@ end
 dofile("tests/fuzzy_spec.lua")
 dofile("tests/frecency_spec.lua")
 dofile("tests/fzf_lua_spec.lua")
+dofile("tests/cmd_spec.lua")
 
 if failures > 0 then
   error(("%d of %d tests failed"):format(failures, tests))
