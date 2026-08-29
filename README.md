@@ -324,21 +324,22 @@ require("fzf-lua").setup({
   hls = {
     normal = "Normal",
   },
-  -- Depending on your fzf-lua version/config structure,
-  -- this is best applied to the individual pickers:
-  files = {
-    previewer = false,
-  },
-  buffers = {
-    previewer = false,
-  },
-  grep = {
-    previewer = false,
-  },
-  live_grep = {
-    previewer = false,
-  },
 })
+```
+
+The `files` and `global` wrappers enable fzf-lua's builtin previewer hidden by
+default, with a vertical preview above the results (`up:40%`) at the top of the
+editor by default (an explicit `winopts.row` still wins). Press fzf-lua's
+default `toggle-preview` key (`<F4>` in the builtin window or `f4` in fzf) to
+open and close it. Existing `keymap.builtin` and
+`keymap.fzf` settings are preserved; add the following to your fzf-lua setup to
+use another key if needed:
+
+```lua
+keymap = {
+  builtin = { ["<C-p>"] = "toggle-preview" },
+  fzf = { ["ctrl-p"] = "toggle-preview" },
+},
 ```
 
 Then call the minibuffer integration instead of the corresponding fzf-lua

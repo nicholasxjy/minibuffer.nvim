@@ -163,6 +163,68 @@ local function with_fake_fzf(run, fake_opts)
   end
 end
 
+test("fzf-lua files default to a hidden top preview", function()
+  with_fake_fzf(function(integration, capture)
+    integration.files({ cwd = "/repo", smart = { query_delay = 0 } })
+
+    eq(true, capture.opts.previewer)
+    eq(0, capture.opts.winopts.row)
+    eq(true, capture.opts.winopts.preview.hidden)
+    eq("vertical", capture.opts.winopts.preview.layout)
+    eq("up:40%", capture.opts.winopts.preview.vertical)
+  end)
+end)
+
+test("fzf-lua files preserve explicit preview options", function()
+  with_fake_fzf(function(integration, capture)
+    local previewer = {}
+    integration.files({
+      cwd = "/repo",
+      previewer = previewer,
+      preview = "custom-preview",
+      winopts = {
+        row = 0.75,
+        preview = {
+          hidden = false,
+          layout = "horizontal",
+          vertical = "down:20%",
+        },
+      },
+      smart = { query_delay = 0 },
+    })
+
+    eq(previewer, capture.opts.previewer)
+    eq("custom-preview", capture.opts.preview)
+    eq(0.75, capture.opts.winopts.row)
+    eq(false, capture.opts.winopts.preview.hidden)
+    eq("horizontal", capture.opts.winopts.preview.layout)
+    eq("down:20%", capture.opts.winopts.preview.vertical)
+  end)
+end)
+
+test("fzf-lua files leave preview disabled when requested", function()
+  with_fake_fzf(function(integration, capture)
+    integration.files({ cwd = "/repo", previewer = false })
+
+    eq(false, capture.opts.previewer)
+    eq(nil, capture.opts.winopts.preview)
+  end)
+end)
+
+test("fzf-lua global applies preview defaults to both windows", function()
+  with_fake_fzf(function(integration, capture)
+    integration.global({ cwd = "/repo", smart = { query_delay = 0 } })
+
+    for _, opts in ipairs({ capture.global_opts, capture.global_provider_opts }) do
+      eq(true, opts.previewer)
+      eq(0, opts.winopts.row)
+      eq(true, opts.winopts.preview.hidden)
+      eq("vertical", opts.winopts.preview.layout)
+      eq("up:40%", opts.winopts.preview.vertical)
+    end
+  end)
+end)
+
 test("fzf-lua files loads once and reloads in smart order", function()
   with_fake_fzf(function(integration, capture)
     integration.files({

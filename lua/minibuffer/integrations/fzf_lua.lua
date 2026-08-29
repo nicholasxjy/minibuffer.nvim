@@ -32,6 +32,14 @@ local DEFAULT_SMART = {
   history_bonus = false,
   query_delay = 30,
 }
+local DEFAULT_PREVIEW = {
+  row = 0,
+  preview = {
+    hidden = true,
+    layout = "vertical",
+    vertical = "up:40%",
+  },
+}
 local RESUME_RETENTION_MS = 5 * 60 * 1000
 
 local M = {}
@@ -337,6 +345,75 @@ local function preserve_toggle_actions(opts)
   end
 end
 
+local function option_value(value, path, opts)
+  for key in path:gmatch("[^.]+") do
+    if type(value) == "function" then
+      local ok, result = pcall(value, opts)
+      if not ok then
+        return nil
+      end
+      value = result
+    end
+    if type(value) ~= "table" then
+      return nil
+    end
+    value = value[key]
+  end
+  return value
+end
+
+local function is_explicit_preview_option(raw_opts, provider, path, opts)
+  if path == "winopts.preview.hidden" then
+    for _, source in ipairs({ raw_opts, FzfLua.config.setup_opts }) do
+      local previewer = option_value(source, "previewer", opts)
+      if previewer == "hidden" or previewer == "nohidden" then
+        return true
+      end
+    end
+  end
+  if option_value(raw_opts, path, opts) ~= nil then
+    return true
+  end
+  local setup = FzfLua.config.setup_opts
+  if type(setup) ~= "table" then
+    return false
+  end
+  for _, source in ipairs({ setup, setup.defaults }) do
+    if option_value(source, path, opts) ~= nil then
+      return true
+    end
+  end
+  return option_value(setup[provider], path, opts) ~= nil
+end
+
+local function apply_preview_defaults(opts, provider, raw_opts)
+  if opts.previewer == false then
+    return opts
+  end
+
+  if
+    opts.previewer == nil
+    and opts.preview == nil
+    and not is_explicit_preview_option(raw_opts, provider, "previewer", opts)
+    and not is_explicit_preview_option(raw_opts, provider, "preview", opts)
+  then
+    opts.previewer = true
+  end
+
+  opts.winopts = type(opts.winopts) == "table" and opts.winopts or {}
+  if not is_explicit_preview_option(raw_opts, provider, "winopts.row", opts) then
+    opts.winopts.row = DEFAULT_PREVIEW.row
+  end
+  opts.winopts.preview =
+    type(opts.winopts.preview) == "table" and opts.winopts.preview or {}
+  for key, value in pairs(DEFAULT_PREVIEW.preview) do
+    if not is_explicit_preview_option(raw_opts, provider, "winopts.preview." .. key, opts) then
+      opts.winopts.preview[key] = value
+    end
+  end
+  return opts
+end
+
 local function clear_processing(opts)
   opts.fn_transform = nil
   opts.fn_preprocess = nil
@@ -553,10 +630,12 @@ local function start_global(candidates, file_opts, global_opts, smart, call_opts
 end
 
 local function normalize_files(opts, resume_key)
+  local raw_opts = vim.deepcopy(opts)
   opts = FzfLua.config.normalize_opts(opts, "files", resume_key)
   if not opts then
     return
   end
+  apply_preview_defaults(opts, "files", raw_opts)
   if opts.ignore_current_file then
     local current = vim.api.nvim_buf_get_name(0)
     if current ~= "" then
@@ -618,6 +697,7 @@ function M.global(opts)
   end
   local generation = begin_invocation()
   opts = vim.deepcopy(opts or {})
+  local raw_opts = vim.deepcopy(opts)
   local call_opts = vim.deepcopy(opts)
   local smart = vim.tbl_deep_extend("force", {}, DEFAULT_SMART, opts.smart or {})
   opts.smart = nil
@@ -627,6 +707,7 @@ function M.global(opts)
   if not global_opts then
     return
   end
+  apply_preview_defaults(global_opts, "global", raw_opts)
   if
     type(FzfLua.utils.has) == "function"
     and not FzfLua.utils.has(global_opts, "fzf", { 0, 59 })
