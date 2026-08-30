@@ -103,7 +103,12 @@ function ScratchSession:render()
       group = augroup,
       pattern = tostring(self._win),
       callback = function()
-        self:close()
+        -- Let other WinClosed callbacks inspect the window before cleaning up.
+        vim.schedule(function()
+          if not self._closed and state.session == self then
+            self:close()
+          end
+        end)
       end,
     })
   end

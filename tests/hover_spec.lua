@@ -38,3 +38,56 @@ test("builtin hover redirects the native preview", function()
   eq("minibuffer", captured.win_opts.relative)
   eq(true, captured.win_opts.use_minibuffer)
 end)
+
+test("builtin hover closes without invalid window callbacks", function()
+  local state = require("minibuffer.internal.state")
+  local mbutil = require("minibuffer.internal.util")
+  local old_get_cmd_win = mbutil.get_cmd_win
+  local old_get_cmd_buf = mbutil.get_cmd_buf
+  local old_ready = mbutil.ready
+  local cmd_buf = vim.api.nvim_create_buf(false, true)
+  local cmd_win = state.default_nvim_open_win(cmd_buf, false, {
+    relative = "editor",
+    row = vim.o.lines - 2,
+    col = 0,
+    width = vim.o.columns,
+    height = 1,
+    style = "minimal",
+    zindex = 100,
+  })
+
+  mbutil.get_cmd_win = function()
+    return cmd_win
+  end
+  mbutil.get_cmd_buf = function()
+    return cmd_buf
+  end
+  mbutil.ready = function()
+    return true
+  end
+
+  package.loaded["minibuffer.builtin.hover"] = nil
+  require("minibuffer.builtin.hover")
+  local _, hover_win = vim.lsp.util.open_floating_preview({ "hover" }, "", {
+    use_minibuffer = true,
+    focus_id = "textDocument/hover",
+  })
+  vim.api.nvim_set_current_win(hover_win)
+  local ok, err = pcall(vim.cmd, "bdelete!")
+  vim.wait(50)
+
+  mbutil.get_cmd_win = old_get_cmd_win
+  mbutil.get_cmd_buf = old_get_cmd_buf
+  mbutil.ready = old_ready
+  if vim.api.nvim_win_is_valid(cmd_win) then
+    state.default_nvim_win_close(cmd_win, true)
+  end
+  if vim.api.nvim_buf_is_valid(cmd_buf) then
+    vim.api.nvim_buf_delete(cmd_buf, { force = true })
+  end
+
+  if not ok then
+    error(err)
+  end
+  eq(false, vim.api.nvim_win_is_valid(hover_win))
+end)
