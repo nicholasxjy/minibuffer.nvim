@@ -28,11 +28,12 @@ if not lsp_util._minibuffer_hover then
 end
 
 ---@param config? vim.lsp.buf.hover.Opts
-return function(config)
+---@param ... any
+return function(config, ...)
   require("minibuffer.internal.guard").check()
   if config ~= nil and type(config) ~= "table" then
-    return native_hover(config)
+    return native_hover(config, ...)
   end
   config = vim.tbl_extend("force", config or {}, { use_minibuffer = true })
-  return native_hover(config)
+  return native_hover(config, ...)
 end

@@ -185,6 +185,9 @@ end, { desc = "Find in quickfix" })
 
 -- Keep Neovim's native LSP hover behavior, but show its window in the minibuffer.
 vim.lsp.buf.hover = require("minibuffer.builtin.hover")
+
+-- Native hover options are still accepted and forwarded.
+-- Example: vim.lsp.buf.hover({ border = "rounded", max_width = 80 })
 ```
 
 ## Interesting things you can do when using the minibuffer command line
