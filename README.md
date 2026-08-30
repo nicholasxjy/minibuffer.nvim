@@ -182,6 +182,9 @@ vim.keymap.set(
 vim.keymap.set("n", "<leader>fq", function()
   require("minibuffer.builtin.list")({ type = "quickfix" })
 end, { desc = "Find in quickfix" })
+
+-- Keep Neovim's native LSP hover behavior, but show its window in the minibuffer.
+vim.lsp.buf.hover = require("minibuffer.builtin.hover")
 ```
 
 ## Interesting things you can do when using the minibuffer command line
