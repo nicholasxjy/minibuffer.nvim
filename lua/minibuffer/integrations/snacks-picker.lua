@@ -296,26 +296,24 @@ local function git_status_lookup(Snacks, opts)
     return status_lookups[opts]
   end
 
-  local statuses = {}
-  local loaded = false
+  local repositories = {}
   local cwd = type(opts.cwd) == "string" and opts.cwd or (vim.uv or vim.loop).cwd()
   cwd = absolute_path(vim.fs.normalize(cwd or "."))
-  local root = cwd
-  if Snacks.git and type(Snacks.git.get_root) == "function" then
-    local ok, git_root = pcall(Snacks.git.get_root, cwd)
-    if ok and type(git_root) == "string" and git_root ~= "" then
-      root = git_root
-    end
-  end
-  root = absolute_path(vim.fs.normalize(root))
 
-  local function load()
-    if loaded then
-      return
+  local function load(root)
+    if repositories[root] then
+      return repositories[root]
     end
-    loaded = true
-    -- ponytail: one synchronous status scan per picker; make it async if large
-    -- repos stall UI.
+    -- Snacks sorts in fast events, where vim.system's Vim API calls cannot run.
+    if vim.in_fast_event() then
+      return require("snacks.picker.util.async").running():schedule(function()
+        return load(root)
+      end)
+    end
+    local statuses = {}
+    repositories[root] = statuses
+    -- ponytail: one synchronous status scan per repository per picker; make it
+    -- async if large repos stall UI.
     local ok, result = pcall(function()
       return vim.system({
         "git",
@@ -329,7 +327,7 @@ local function git_status_lookup(Snacks, opts)
       }, { text = true }):wait()
     end)
     if not ok or not result or result.code ~= 0 then
-      return
+      return statuses
     end
 
     local parts = vim.split(result.stdout or "", "\0", { plain = true, trimempty = true })
@@ -351,6 +349,7 @@ local function git_status_lookup(Snacks, opts)
       end
       index = index + 1
     end
+    return statuses
   end
 
   local function lookup(item)
@@ -362,7 +361,6 @@ local function git_status_lookup(Snacks, opts)
     if type(file) ~= "string" or file == "" then
       return
     end
-    load()
     local item_cwd = type(item.cwd) == "string"
       and absolute_path(vim.fs.normalize(item.cwd))
       or cwd
@@ -371,11 +369,17 @@ local function git_status_lookup(Snacks, opts)
       path = item_cwd .. "/" .. path
     end
     path = absolute_path(vim.fs.normalize(path))
+    local root = cwd
+    if Snacks.git and type(Snacks.git.get_root) == "function" then
+      local ok, git_root = pcall(Snacks.git.get_root, path)
+      if not ok or type(git_root) ~= "string" or git_root == "" then
+        return
+      end
+      root = absolute_path(vim.fs.normalize(git_root))
+    end
+    local statuses = load(root)
     local relative_root = vim.fs.relpath(root, path)
-    local relative_cwd = vim.fs.relpath(item_cwd, path)
     return statuses[normalize_path(relative_root)]
-      or statuses[normalize_path(relative_cwd)]
-      or statuses[normalize_path(file)]
   end
 
   status_lookups[opts] = lookup
