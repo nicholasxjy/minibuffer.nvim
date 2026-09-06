@@ -1,4 +1,4 @@
-.PHONY: dl-deps doc check-doc test coverage-html luacheck check-stylua stylua check-mdformat mdformat check
+.PHONY: api-doc
 
 dl-deps:
 	@clone() { \

@@ -137,13 +137,13 @@ function minibuffer.initialize()
   vim.api.nvim_create_autocmd("CmdlineChanged", {
     group = state.augroup,
     callback = function()
-      if config.cmd.autotrigger and vim.fn.mode() == "c" then
+      if config.cmd.enabled and config.cmd.autotrigger and vim.fn.mode() == "c" then
         vim.fn.wildtrigger()
       end
     end,
   })
 
-  if config.cmd.autotrigger then
+  if config.cmd.enabled and config.cmd.autotrigger then
     vim.o.wildmode = "noselect,full"
   end
 
