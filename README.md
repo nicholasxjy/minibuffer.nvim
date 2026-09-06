@@ -199,7 +199,7 @@ vim.keymap.set("n", "<leader>hh", ":h ", { desc = "Help" })
 Two integration types can be seen below:
 
 - Using the backend of a plugin with the minibuffer frontend APIs (as seen in the fff.nvim example below)
-- Allowing each plugin to draw their own window but configuring the window settings to put it into the minibuffer container (as seen in the which-key.nvim, mini.pick and fzf.lua examples below)
+- Allowing each plugin to draw their own window but configuring the window settings to put it into the minibuffer container (as seen in the which-key.nvim, mini.pick and fzf integration examples below)
 
 When possible, the first option is preferred.
 Some plugins don't expose their data fetching code through their public APIs and in such cases the second option can be used.
@@ -321,20 +321,24 @@ else
 end
 ```
 
-## fzf-lua
+## fzf
 
-Minibuffer provides opt-in smart-ranked `files` and `global` wrappers for
-[fzf-lua](https://github.com/ibhagwan/fzf-lua). The wrappers keep fzf-lua's
-window, preview, formatting and actions, while ranking file candidates with the
-same strategy as `Snacks.picker.smart`.
+Minibuffer provides a single integration for
+[fzf-lua](https://github.com/ibhagwan/fzf-lua). It keeps fzf-lua's window,
+preview, formatting and actions, while ranking file candidates with the same
+strategy as `Snacks.picker.smart`.
 
 This integration requires `fzf-lua` and `fzf`. The `global` wrapper requires
 `fzf >= 0.59`. `snacks.nvim` is not required.
 
-Configure fzf-lua's window as usual:
+`minibuffer.integrations.fzf_lua` remains as a compatibility alias.
+
+Configure fzf-lua through the integration so its window uses the minibuffer:
 
 ```lua
-require("fzf-lua").setup({
+local fzf_mb = require("minibuffer.integrations.fzf")
+
+fzf_mb({
   fzf_opts = {
     ["--no-separator"] = true,
   },
@@ -376,7 +380,7 @@ Then call the minibuffer integration instead of the corresponding fzf-lua
 picker:
 
 ```lua
-local fzf_mb = require("minibuffer.integrations.fzf_lua")
+local fzf_mb = require("minibuffer.integrations.fzf")
 
 vim.keymap.set("n", "<leader><leader>", function()
   fzf_mb.files()

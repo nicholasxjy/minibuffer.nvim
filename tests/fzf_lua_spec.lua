@@ -2,7 +2,7 @@ local function with_fake_fzf(run, fake_opts)
   fake_opts = fake_opts or {}
   local old_fzf = package.loaded["fzf-lua"]
   local old_files = package.loaded["fzf-lua.providers.files"]
-  local old_integration = package.loaded["minibuffer.integrations.fzf_lua"]
+  local old_integration = package.loaded["minibuffer.integrations.fzf"]
   local old_notify = vim.notify
   local capture = {
     data_callbacks = {},
@@ -17,6 +17,9 @@ local function with_fake_fzf(run, fake_opts)
     opts.__call_fn({ no_ignore = not opts.no_ignore, resume = true })
   end
   fake = {
+    setup = function(opts)
+      capture.setup_opts = opts
+    end,
     actions = { toggle_ignore = toggle_ignore },
     config = {
       normalize_opts = function(opts, provider)
@@ -144,24 +147,40 @@ local function with_fake_fzf(run, fake_opts)
       return "list-files"
     end,
   }
-  package.loaded["minibuffer.integrations.fzf_lua"] = nil
+  package.loaded["minibuffer.integrations.fzf"] = nil
   vim.notify = function(message, level)
     capture.notifications[#capture.notifications + 1] =
       { message = message, level = level }
   end
 
   local ok, err = xpcall(function()
-    run(require("minibuffer.integrations.fzf_lua"), capture)
+    run(require("minibuffer.integrations.fzf"), capture)
   end, debug.traceback)
 
   package.loaded["fzf-lua"] = old_fzf
   package.loaded["fzf-lua.providers.files"] = old_files
-  package.loaded["minibuffer.integrations.fzf_lua"] = old_integration
+  package.loaded["minibuffer.integrations.fzf"] = old_integration
   vim.notify = old_notify
   if not ok then
     error(err, 0)
   end
 end
+
+test("fzf setup keeps the minibuffer window style", function()
+  with_fake_fzf(function(integration, capture)
+    integration({
+      fzf_opts = { ["--height"] = "80%" },
+      hls = { border = "FloatBorder" },
+    })
+
+    eq("80%", capture.setup_opts.fzf_opts["--height"])
+    eq(true, capture.setup_opts.fzf_opts["--no-separator"])
+    eq("FloatBorder", capture.setup_opts.hls.border)
+    eq("Normal", capture.setup_opts.hls.normal)
+    eq("minibuffer", capture.setup_opts.winopts().relative)
+    eq(true, capture.setup_opts.winopts().use_minibuffer)
+  end)
+end)
 
 test("fzf-lua files default to a hidden top preview", function()
   with_fake_fzf(function(integration, capture)
@@ -396,7 +415,7 @@ test("fzf-lua global replaces only the default files provider", function()
       cwd = "/repo",
       line_query = true,
       pickers = {
-        { "files", desc = "Files" },
+        { "files", desc = "Files", prefix = "" },
         { "buffers", desc = "Buffers", prefix = "$" },
       },
       smart = { cwd_bonus = false, frecency = false, query_delay = 0 },
