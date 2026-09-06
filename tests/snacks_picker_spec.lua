@@ -254,13 +254,18 @@ test("Snacks files and smart use filename-first formatting by default", function
   end)
 end)
 
-test("Snacks smart can prioritize and decorate git changes", function()
+test("Snacks smart keeps native sorting unless git status sorting is enabled", function()
   with_fake_snacks(function(integration, Snacks)
     integration.setup({ smart = { git_status = true } })
 
     local sort = Snacks.picker.config.sort({ source = "smart" })
-    local changed = { file = "src/changed.lua", status = "modified" }
-    local clean = { status = "clean" }
+    local changed = { file = "src/z-changed.lua", status = "modified" }
+    local clean = { file = "src/a-clean.lua", status = "clean" }
+    eq(false, sort(changed, clean))
+    eq(true, sort(clean, changed))
+
+    integration.setup({ smart = { git_status = true, git_status_sort = true } })
+    sort = Snacks.picker.config.sort({ source = "smart" })
     eq(true, sort(changed, clean))
     eq(false, sort(clean, changed))
 

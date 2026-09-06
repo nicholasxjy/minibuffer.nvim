@@ -290,12 +290,12 @@ Snacks.picker.smart()
 `filename_first` is enabled automatically for these two sources; `filename_only`
 keeps its path layout, and custom formatters keep their native behavior.
 
-Enable git-aware smart results to put changed files first and show status
-highlights plus sign-column markers:
+Enable git status highlights plus sign-column markers for smart results. Set
+`git_status_sort` to also put changed files first:
 
 ```lua
 require("minibuffer.integrations.snacks-picker").setup({
-  smart = { git_status = true },
+  smart = { git_status = true, git_status_sort = true },
 })
 ```
 

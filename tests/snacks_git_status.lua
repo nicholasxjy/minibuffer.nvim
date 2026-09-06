@@ -1,7 +1,9 @@
 -- Run with snacks.nvim on the runtimepath:
 -- nvim --headless -u tests/minimal_init.lua --cmd 'set rtp+=/path/to/snacks.nvim' -l tests/snacks_git_status.lua
 require("snacks").setup({ picker = { enabled = true } })
-require("minibuffer.integrations.snacks-picker").setup({ smart = { git_status = true } })
+require("minibuffer.integrations.snacks-picker").setup({
+  smart = { git_status = true, git_status_sort = true },
+})
 
 local root = vim.fn.tempname()
 local picker

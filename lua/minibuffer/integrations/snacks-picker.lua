@@ -6,7 +6,7 @@ local status_lookups = setmetatable({}, { __mode = "k" })
 
 ---@class minibuffer.integrations.SnacksPickerOpts
 ---@field pickers? boolean|table<string, boolean> Per-picker minibuffer overrides
----@field smart? boolean|{git_status?: boolean} Enable git-aware smart picker decorations
+---@field smart? boolean|{git_status?: boolean, git_status_sort?: boolean} Enable git-aware smart picker features
 
 local git_statuses = {
   modified = {
@@ -403,6 +403,17 @@ local function smart_git_status(opts)
   return smart.git_status == true
 end
 
+local function smart_git_status_sort(opts)
+  local smart = opts.smart
+  if type(smart) ~= "table" then
+    return false
+  end
+  if smart.git_status_sort ~= nil and type(smart.git_status_sort) ~= "boolean" then
+    error("`smart.git_status_sort` must be a boolean.", 3)
+  end
+  return smart.git_status_sort == true
+end
+
 local function picker_selection(opts)
   local pickers = opts.pickers
   if pickers == nil or type(pickers) == "boolean" then
@@ -619,6 +630,7 @@ function M.setup(opts)
       state.pickers = picker_selection(opts)
       if opts.smart ~= nil then
         state.smart_git_status = smart_git_status(opts)
+        state.smart_git_status_sort = smart_git_status_sort(opts)
         if state.smart_git_status then
           ensure_git_highlights()
         end
@@ -629,6 +641,7 @@ function M.setup(opts)
   state = {
     pickers = picker_selection(opts or {}),
     smart_git_status = smart_git_status(opts or {}),
+    smart_git_status_sort = smart_git_status_sort(opts or {}),
   }
   if state.smart_git_status then
     ensure_git_highlights()
@@ -675,7 +688,7 @@ function M.setup(opts)
       local sort_opts = select(1, ...)
       local sort = native_sort(...)
       if
-        not state.smart_git_status
+        not state.smart_git_status_sort
         or type(sort_opts) ~= "table"
         or sort_opts.source ~= "smart"
         or not uses_minibuffer(state, sort_opts.source)
