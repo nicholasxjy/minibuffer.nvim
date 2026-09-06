@@ -264,7 +264,7 @@ describe("minibuffer.sessions.select", function()
 
       assert.same({
         { "0 items", "Normal" },
-        { " C-y accept, C-n next, C-p prev", "Comment" },
+        { " C-y accept, C-n/Down/Tab next, C-p/Up/S-Tab prev", "Comment" },
       }, footer)
     end)
 
@@ -275,7 +275,10 @@ describe("minibuffer.sessions.select", function()
 
       assert.same({
         { "0 items", "Normal" },
-        { " C-x toggle, C-a toggle-all, C-y accept, C-n next, C-p prev", "Comment" },
+        {
+          " C-x toggle, C-a toggle-all, C-y accept, C-n/Down/Tab next, C-p/Up/S-Tab prev",
+          "Comment",
+        },
       }, footer)
     end)
   end)

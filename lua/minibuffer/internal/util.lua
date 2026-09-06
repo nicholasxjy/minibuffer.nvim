@@ -155,6 +155,16 @@ end
 
 local M = {}
 
+---@param keys string|string[]
+---@return string
+function M.keymap_label(keys)
+  local labels = {}
+  for _, key in ipairs(type(keys) == "string" and { keys } or keys) do
+    labels[#labels + 1] = key:match("^<(.+)>$") or key
+  end
+  return #labels > 0 and table.concat(labels, "/") or "disabled"
+end
+
 function M.get_ext()
   return ext
 end

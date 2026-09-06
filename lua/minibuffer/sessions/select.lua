@@ -39,6 +39,7 @@ end
 
 ---@class minibuffer.core.SelectSession : minibuffer.core.Session
 ---@field prompt string
+---@field keymaps minibuffer.config.select.keymaps
 ---@field max_height integer
 ---@field multi boolean
 ---@field dynamic_height boolean
@@ -67,6 +68,8 @@ SelectSession.__index = SelectSession
 SelectSession = SelectSession
 
 ---@class minibuffer.core.SelectSessionOpts
+---Navigation mappings; each action replaces the global default.
+---@field keymaps minibuffer.config.select.keymaps|nil
 ---Whether this specific session is reusable
 ---@field resumable boolean|nil
 ---The prompt string to display to the user
@@ -101,7 +104,19 @@ SelectSession = SelectSession
 ---@return minibuffer.core.SelectSession
 function SelectSession.new(opts)
   opts = opts or {}
+  local keymaps = vim.tbl_extend("force", config.select.keymaps, opts.keymaps or {})
+  for action, keys in pairs(keymaps) do
+    vim.validate(action, keys, { "string", "table" })
+    assert(type(keys) == "string" or vim.islist(keys), action .. " must be a list")
+    for _, key in ipairs(type(keys) == "string" and { keys } or keys) do
+      assert(
+        type(key) == "string" and key ~= "",
+        action .. " must contain non-empty keys"
+      )
+    end
+  end
   local self = setmetatable({
+    keymaps = keymaps,
     prompt = opts.prompt or "Select: ",
     max_height = opts.max_height or 15,
     multi = opts.multi == true,
@@ -113,7 +128,15 @@ function SelectSession.new(opts)
       local prefix = ctx.multi and " C-x toggle, C-a toggle-all," or ""
       return {
         { #ctx.items .. " items", "Normal" },
-        { prefix .. " C-y accept, C-n next, C-p prev", "Comment" },
+        {
+          prefix
+            .. " C-y accept, "
+            .. util.keymap_label(keymaps.next)
+            .. " next, "
+            .. util.keymap_label(keymaps.previous)
+            .. " prev",
+          "Comment",
+        },
       }
     end,
     on_start = opts.on_start,
@@ -348,24 +371,14 @@ function SelectSession:post_start()
   keyset("i", "<C-y>", function()
     self:accept()
   end)
-  keyset("i", "<Up>", function()
-    self:move(-1)
-  end)
-  keyset("i", "<Down>", function()
-    self:move(1)
-  end)
-  keyset("i", "<C-p>", function()
-    self:move(-1)
-  end)
-  keyset("i", "<C-n>", function()
-    self:move(1)
-  end)
-  keyset("i", "<S-Tab>", function()
-    self:move(-1)
-  end)
-  keyset("i", "<Tab>", function()
-    self:move(1)
-  end)
+  for action, delta in pairs({ next = 1, previous = -1 }) do
+    local keys = self.keymaps[action]
+    for _, key in ipairs(type(keys) == "string" and { keys } or keys) do
+      keyset("i", key, function()
+        self:move(delta)
+      end)
+    end
+  end
   keyset("i", "<C-w>", "<C-S-w>")
 
   if self.multi then

@@ -221,11 +221,19 @@ minibuffer.cmd.Opts                                        *minibuffer.cmd.Opts*
         {max_height?}      (integer)  Maximum height when using the command line
 
 
+minibuffer.config.select.keymaps              *minibuffer.config.select.keymaps*
+
+    Fields: ~
+        {next?}      (string|string[])
+        {previous?}  (string|string[])
+
+
 minibuffer.Opts                                                *minibuffer.Opts*
 
     Fields: ~
-        {dynamic_window_resize?}  (boolean)              Shrink other windows when the minibuffer is expanded
-        {cmd?}                    (minibuffer.cmd.Opts)  Opts for cmdline
+        {dynamic_window_resize?}  (boolean)                                     Shrink other windows when the minibuffer is expanded
+        {cmd?}                    (minibuffer.cmd.Opts)                         Opts for cmdline
+        {select?}                 ({keymaps:minibuffer.config.select.keymaps})
 
 
 ==============================================================================
@@ -628,6 +636,7 @@ minibuffer.core.SelectSession : minibuffer.core.Session
 
     Fields: ~
         {prompt}             (string)
+        {keymaps}            (minibuffer.config.select.keymaps)
         {max_height}         (integer)
         {multi}              (boolean)
         {dynamic_height}     (boolean)
@@ -656,6 +665,7 @@ minibuffer.core.SelectSession : minibuffer.core.Session
 minibuffer.core.SelectSessionOpts            *minibuffer.core.SelectSessionOpts*
 
     Fields: ~
+        {keymaps}         (minibuffer.config.select.keymaps|nil)     Navigation mappings; each action replaces the global default.
         {resumable}       (boolean|nil)                              Whether this specific session is reusable
         {prompt}          (string|nil)                               The prompt string to display to the user
         {max_height}      (integer|nil)                              The max height the minibuffer can grow to

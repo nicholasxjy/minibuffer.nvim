@@ -88,6 +88,12 @@ This plugin can be configured by using `vim.g.minibuffer` (preferably set before
 -- Default configuration
 vim.g.minibuffer = {
   dynamic_window_resize = true, -- Shrink other windows when the minibuffer is expanded
+  select = {
+    keymaps = {
+      next = { "<C-n>", "<Down>", "<Tab>" },
+      previous = { "<C-p>", "<Up>", "<S-Tab>" },
+    },
+  },
   cmd = {
     -- NOTE: minibuffer cmd is not compatible with command line plugins that force `wildtrigger()` each `wildchar` such as mini.cmdline
     enabled = true, -- Enable command line wildmenu replacement through the minibuffer
@@ -212,13 +218,80 @@ Feel free to take a look at what options are used in the `lua/minibuffer/integra
 local fff_mb = require("minibuffer.integrations.fff")
 
 vim.keymap.set("n", "<leader><leader>", function()
-  fff_mb.file_search({})
+  fff_mb.file_search("", { mode = "files" })
 end, { desc = "FFFind" })
 
 vim.keymap.set("n", "<leader>/", function()
-  fff_mb.content_search({})
+  fff_mb.content_search("", { mode = "regex", smart_case = true })
 end, { desc = "FFFGrep" })
 ```
+
+Both functions accept `(query, opts)` using [fff's search API options](https://github.com/dmtrKovalenko/fff/blob/main/lua/fff/main.lua).
+The query prefills the minibuffer; existing opts-only calls still work.
+
+The list uses fff's native row renderers: Git signs in the left sign column,
+file icons from fff's icon provider, filename/directory layout, shortened paths,
+and grep results grouped under file headers. Selection skips the headers.
+In filename-first layout, directory names share a left-aligned column after a
+` │ ` separator. Alignment includes icon widths and Unicode display widths,
+and also applies to grep file headers. The separator uses `hl.separator`
+(or `hl.directory_path` when unset). Explicit `layout.show_path_first = true`
+keeps the native path-first layout.
+This requires a recent fff version with `fff.picker_ui.file_name_renderer`.
+
+Configuration inherits `require("fff.conf").get()`. Per-call options override
+the corresponding global settings without changing them:
+
+```lua
+fff_mb.file_search("", {
+  layout = {
+    show_path_first = false,
+    path_shorten_strategy = "middle",
+    prompt_position = "bottom",
+  },
+  git = { status_text_color = true },
+  hl = { directory_path = "Comment", cursor = "Visual" },
+  file_picker = { fuzzy_query_highlighting = true },
+  debug = { show_scores = false },
+  keymaps = {
+    move_down = { "<C-n>", "<C-j>" },
+    move_up = { "<C-p>", "<C-k>" },
+  },
+  -- Integration-specific overrides:
+  highlights = { git_sign_modified = { fg = "#e5c07b" } },
+  git_status_signs = { modified = "M", untracked = "?" },
+})
+```
+
+Supported list settings include `layout.show_path_first`,
+`layout.path_shorten_strategy`, `layout.prompt_position` (result order),
+`git.status_text_color`, `hl` (including list/prompt `winhl`),
+`file_picker.current_file_label`, `file_picker.fuzzy_query_highlighting`,
+`debug.show_scores`, `prompt`, and `wrap_around`.
+Minibuffer owns the window geometry and keeps its bottom input and 15-row maximum;
+fff preview, scrollbar, and separate debug-panel settings do not apply.
+
+The integration inherits fff's navigation, close, select, split/vsplit/tab,
+multi-select, quickfix, and grep-mode cycling keys, plus `mappings`.
+The earlier `keymaps.next` / `keymaps.previous` options remain aliases that
+take precedence over `move_down` / `move_up`. Each accepts a string, a list,
+or `{}` to disable the action. fff navigation defaults take precedence over
+`vim.g.minibuffer.select.keymaps` for this integration.
+`select.select_window` is used when opening results.
+
+Grep inherits `grep.modes`, `grep.location_format`, and its search defaults.
+Per-call `grep` overrides the global block; explicit top-level search options
+(such as `smart_case = false`) take precedence over both.
+Display settings are not passed to the search backend.
+
+`highlights` overrides `hl` and accepts group names or `nvim_set_hl`
+attribute tables. Git text/sign groups use `git_<status>` and
+`git_sign_<status>`; all staged statuses use `staged`, and `unknown`
+uses `untracked`. Cursor-row signs use the corresponding
+`git_sign_<status>_selected` group. `git_status_signs` is keyed by raw
+status (`modified`, `staged_new`, etc.); signs must fit in two display cells.
+An empty string hides a sign. `show_git_status = false` hides Git signs and
+filename colors. Unspecified signs use fff's defaults.
 
 ## Which-key.nvim
 

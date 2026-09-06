@@ -55,6 +55,7 @@ minibuffer	minibuffer.txt	/*minibuffer*
 minibuffer.Opts	minibuffer.txt	/*minibuffer.Opts*
 minibuffer.cmd.Opts	minibuffer.txt	/*minibuffer.cmd.Opts*
 minibuffer.config	minibuffer.txt	/*minibuffer.config*
+minibuffer.config.select.keymaps	minibuffer.txt	/*minibuffer.config.select.keymaps*
 minibuffer.contents	minibuffer.txt	/*minibuffer.contents*
 minibuffer.core.CancelCallback	minibuffer.txt	/*minibuffer.core.CancelCallback*
 minibuffer.core.ChangeCallback	minibuffer.txt	/*minibuffer.core.ChangeCallback*

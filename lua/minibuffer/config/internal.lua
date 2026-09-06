@@ -7,10 +7,17 @@
 ---@class minibuffer.Config
 ---@field dynamic_window_resize boolean
 ---@field cmd minibuffer.cmd.Config
+---@field select { keymaps: minibuffer.config.select.keymaps }
 
 ---@type minibuffer.Config
 local default_config = {
   dynamic_window_resize = true,
+  select = {
+    keymaps = {
+      next = { "<C-n>", "<Down>", "<Tab>" },
+      previous = { "<C-p>", "<Up>", "<S-Tab>" },
+    },
+  },
   cmd = {
     enabled = true,
     autotrigger = true,

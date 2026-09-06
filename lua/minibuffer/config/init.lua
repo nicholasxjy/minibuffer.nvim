@@ -33,11 +33,16 @@
 ---Maximum height when using the command line
 ---@field max_height? integer
 
+---@class minibuffer.config.select.keymaps
+---@field next? string|string[]
+---@field previous? string|string[]
+
 ---@class minibuffer.Opts
 ---Shrink other windows when the minibuffer is expanded
 ---@field dynamic_window_resize? boolean
 ---Opts for cmdline
 ---@field cmd? minibuffer.cmd.Opts
+---@field select? { keymaps: minibuffer.config.select.keymaps }
 
 ---@type minibuffer.Opts|fun():minibuffer.Opts|nil
 vim.g.minibuffer = vim.g.minibuffer
