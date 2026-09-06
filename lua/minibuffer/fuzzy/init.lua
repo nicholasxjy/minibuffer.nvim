@@ -27,6 +27,11 @@ local Ranker = {}
 Ranker.__index = Ranker
 
 local DEFAULT_SCORE = 1000
+local SCORE_MATCH = 16
+local SCORE_GAP_START = -3
+local SCORE_GAP_EXTENSION = -1
+local BONUS_BOUNDARY = SCORE_MATCH / 2
+local BONUS_CONSECUTIVE = -(SCORE_GAP_START + SCORE_GAP_EXTENSION)
 local IS_WINDOWS = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
 
 local function normalize_path(path)
@@ -102,6 +107,10 @@ local function prepare_term(opts, pattern)
   if term.ignorecase then
     term.pattern = term.pattern:lower()
   end
+  term.chars = {}
+  for index = 1, #term.pattern do
+    term.chars[index] = term.pattern:sub(index, index)
+  end
   return term
 end
 
@@ -134,15 +143,15 @@ local function parse_query(opts, query)
   return groups
 end
 
-local function fuzzy_match(scorer, text, lookup, pattern, is_file)
+local function fuzzy_match_greedy(scorer, text, lookup, chars, is_file)
   local best
-  local first = lookup:find(pattern:sub(1, 1), 1, true)
+  local first = lookup:find(chars[1], 1, true)
   while first do
     scorer:start(text, first, is_file)
     local position = first
     local matched = true
-    for index = 2, #pattern do
-      position = lookup:find(pattern:sub(index, index), position + 1, true)
+    for index = 2, #chars do
+      position = lookup:find(chars[index], position + 1, true)
       if not position then
         matched = false
         break
@@ -152,7 +161,90 @@ local function fuzzy_match(scorer, text, lookup, pattern, is_file)
     if matched and (not best or scorer.value > best) then
       best = scorer.value
     end
-    first = lookup:find(pattern:sub(1, 1), first + 1, true)
+    first = lookup:find(chars[1], first + 1, true)
+  end
+  return best
+end
+
+local MAX_DP_CELLS = 4096
+
+local function fuzzy_match(scorer, text, lookup, chars, is_file)
+  local pattern_length = #chars
+  if pattern_length == 0 then
+    return
+  end
+  if #lookup * pattern_length > MAX_DP_CELLS then
+    -- ponytail: bounded DP keeps typing responsive; use the greedy matcher for
+    -- unusually large inputs, and move to fzf's full V2 matrix if this ceiling matters.
+    return fuzzy_match_greedy(scorer, text, lookup, chars, is_file)
+  end
+
+  local previous = {}
+  local first = lookup:find(chars[1], 1, true)
+  while first do
+    local raw_bonus = scorer:bonus_at(text, first)
+    scorer:start(text, first, is_file)
+    previous[first] = { [raw_bonus] = scorer.value }
+    first = lookup:find(chars[1], first + 1, true)
+  end
+
+  for index = 2, pattern_length do
+    local current = {}
+    local gap_best
+    local character = chars[index]:byte()
+    for position = 1, #lookup do
+      local predecessor = previous[position - 2]
+      if predecessor then
+        for _, score in pairs(predecessor) do
+          local value = score - (position - 3) * SCORE_GAP_EXTENSION
+          if not gap_best or value > gap_best then
+            gap_best = value
+          end
+        end
+      end
+
+      if lookup:byte(position) == character then
+        local raw_bonus = scorer:bonus_at(text, position)
+        local states = {}
+        if gap_best then
+          states[raw_bonus] = gap_best
+            + SCORE_GAP_START
+            + (position - 3) * SCORE_GAP_EXTENSION
+            + SCORE_MATCH
+            + raw_bonus
+        end
+
+        local contiguous = previous[position - 1]
+        if contiguous then
+          for first_bonus, score in pairs(contiguous) do
+            local bonus = raw_bonus
+            local next_first_bonus = first_bonus
+            if bonus >= BONUS_BOUNDARY and bonus > first_bonus then
+              next_first_bonus = bonus
+            else
+              bonus = math.max(bonus, first_bonus, BONUS_CONSECUTIVE)
+            end
+            local value = score + SCORE_MATCH + bonus
+            if not states[next_first_bonus] or value > states[next_first_bonus] then
+              states[next_first_bonus] = value
+            end
+          end
+        end
+        if next(states) then
+          current[position] = states
+        end
+      end
+    end
+    previous = current
+  end
+
+  local best
+  for _, states in pairs(previous) do
+    for _, score in pairs(states) do
+      if not best or score > best then
+        best = score
+      end
+    end
   end
   return best
 end
@@ -196,7 +288,7 @@ local function match_term(scorer, candidate, term)
   text = tostring(text)
   local lookup = term.ignorecase and text:lower() or text
   if term.fuzzy then
-    local score = fuzzy_match(scorer, text, lookup, term.pattern, candidate.path ~= nil)
+    local score = fuzzy_match(scorer, text, lookup, term.chars, candidate.path ~= nil)
     if term.inverse then
       return not score and DEFAULT_SCORE or nil
     end
@@ -249,7 +341,7 @@ function Ranker:_bonus(candidate)
   end
   local bonus = 0
   if self.opts.cwd_bonus and self.cwd and candidate.path then
-    local path = IS_WINDOWS and candidate.path:lower() or candidate.path
+    local path = normalize_path(candidate.path)
     local prefix = self.cwd:sub(-1) == "/" and self.cwd or self.cwd .. "/"
     if path == self.cwd or path:sub(1, #prefix) == prefix then
       bonus = bonus + 10
@@ -271,6 +363,7 @@ function Ranker:rank(query, candidates)
   for index, candidate in ipairs(candidates) do
     local score = #groups == 0 and DEFAULT_SCORE
       or match_candidate(self.scorer, candidate, groups)
+    candidate.score = score
     if score then
       score = score + self:_bonus(candidate)
       candidate.idx = candidate.idx or index

@@ -113,8 +113,9 @@ function Score:update(position)
     self.previous_class = CHAR_CLASS[self.text:byte(position - 1)] or CHAR_NONWORD
     bonus = self.bonuses[self.previous_class][class]
     self.value = self.value + SCORE_GAP_START + (gap - 1) * SCORE_GAP_EXTENSION
-    self.consecutive = 0
-    self.first_bonus = 0
+    -- The first match after a gap starts a new consecutive chunk.
+    self.consecutive = 1
+    self.first_bonus = bonus
   else
     bonus = self.bonuses[self.previous_class][class]
     if self.consecutive == 0 then
@@ -134,6 +135,14 @@ function Score:update(position)
   self.value = self.value + SCORE_MATCH + bonus
   self.previous_class = class
   self.previous = position
+end
+
+function Score:bonus_at(text, position)
+  local class = CHAR_CLASS[text:byte(position)] or CHAR_NONWORD
+  local previous = position > 1
+      and (CHAR_CLASS[text:byte(position - 1)] or CHAR_NONWORD)
+    or CHAR_WHITE
+  return self.bonuses[previous][class]
 end
 
 function Score:get(text, first, last, is_file)

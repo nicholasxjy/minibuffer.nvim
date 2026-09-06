@@ -55,6 +55,41 @@ test("matching preserves original case for camel-case scoring", function()
   )
 end)
 
+test("fuzzy matching keeps the best subsequence", function()
+  local ranker = require("minibuffer.fuzzy").new({
+    filename_bonus = false,
+    cwd_bonus = false,
+    frecency = false,
+  })
+
+  eq(68, ranker:rank("aba", { { text = "aabba" } })[1].score)
+end)
+
+test("gap matches retain the boundary bonus for the following chunk", function()
+  local ranker = require("minibuffer.fuzzy").new({
+    filename_bonus = false,
+    cwd_bonus = false,
+    frecency = false,
+  })
+
+  eq(81, ranker:rank("abc", { { text = "a_bc" } })[1].score)
+end)
+
+test("unmatched candidates do not retain a stale score", function()
+  local ranker = require("minibuffer.fuzzy").new({
+    filename_bonus = false,
+    cwd_bonus = false,
+    frecency = false,
+  })
+  local candidates = { { text = "foo" }, { text = "bar" } }
+
+  ranker:rank("foo", candidates)
+  ranker:rank("bar", candidates)
+
+  eq(nil, candidates[1].score)
+  eq(88, candidates[2].score)
+end)
+
 test("extended queries match like Snacks", function()
   local ranker = require("minibuffer.fuzzy").new({ cwd_bonus = false, frecency = false })
   local quote = string.char(39)
@@ -116,6 +151,17 @@ test("cwd and frecency bonuses compose with the fuzzy score", function()
       return item.score
     end, ranked)
   )
+end)
+
+test("cwd bonus normalizes candidate path separators", function()
+  local ranker = require("minibuffer.fuzzy").new({
+    cwd = "C:\\repo",
+    filename_bonus = false,
+    cwd_bonus = true,
+    frecency = false,
+  })
+
+  eq(98, ranker:rank("foo", { { text = "foo", path = "C:\\repo\\foo" } })[1].score)
 end)
 
 test("history bonus uses chronological boundary weighting", function()
