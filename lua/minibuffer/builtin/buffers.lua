@@ -10,22 +10,60 @@ local function update_preview_win(win, buf)
   end
 end
 
+local function get_file_icon(name)
+  local ok, icons = pcall(require, "mini.icons")
+  if ok and type(icons.get) == "function" then
+    local icon, hl = icons.get("file", name)
+    if type(icon) == "string" and icon ~= "" then
+      return icon, hl or "Normal"
+    end
+  end
+
+  ok, icons = pcall(require, "nvim-web-devicons")
+  if ok and type(icons.get_icon) == "function" then
+    local icon, hl = icons.get_icon(name, nil, { default = true })
+    if type(icon) == "string" and icon ~= "" then
+      return icon, hl or "Normal"
+    end
+  end
+
+  return "", "Comment"
+end
+
 -- Collect listed & loaded buffers (excluding special/unlisted)
 local function gather_buffers()
   local bufs = vim.fn.getbufinfo({ buflisted = 1 })
+  local current = vim.api.nvim_get_current_buf()
+  local alternate = vim.fn.bufnr("#")
   local items = {}
+  local max_bufnr = 0
   for _, info in ipairs(bufs) do
     if info.loaded == 1 then
       local path = info.name
-      local name = path ~= "" and vim.fn.fnamemodify(path, ":t") or "[No Name]"
+      local name = path ~= "" and vim.fn.fnamemodify(path, ":~:.") or "[No Name]"
+      local hidden = info.hidden == 1 and "h" or "a"
+      local flag = info.bufnr == current and "%"
+        or info.bufnr == alternate and "#"
+        or " "
+      local readonly = vim.bo[info.bufnr].readonly and "=" or " "
+      local changed = info.changed == 1 and "+" or " "
       items[#items + 1] = {
         bufnr = info.bufnr,
         path = path,
         name = name,
+        flag = flag,
+        flags = hidden .. readonly .. changed,
         lastused = info.lastused or 0,
-        changed = info.changed,
       }
+      max_bufnr = math.max(max_bufnr, info.bufnr)
     end
+  end
+
+  local number_width = #tostring(max_bufnr) + 3
+  for _, item in ipairs(items) do
+    item.bufnr_label = "[" .. item.bufnr .. "]"
+    item.bufnr_padding = number_width - #item.bufnr_label
+    item.icon, item.icon_hl = get_file_icon(item.name)
   end
 
   table.sort(items, function(a, b)
@@ -35,27 +73,20 @@ local function gather_buffers()
   return items
 end
 
-local bufnr_max_width = 4
-local bufnr_overflow_str = "999+"
-
 local function format_fn(item)
-  local bufnr_str = tostring(item.bufnr)
-  local bufnr_len = #bufnr_str
-
-  if bufnr_len > bufnr_max_width then
-    bufnr_str = bufnr_overflow_str
-  else
-    bufnr_str = bufnr_str .. string.rep(" ", bufnr_max_width - bufnr_len)
-  end
-
   return {
-    { text = bufnr_str, hl = "Normal" },
-    { text = item.changed == 1 and " * " or "   ", hl = "Changed" },
-    { text = item.name, hl = "Normal" },
+    { text = item.bufnr_label, hl = "Number" },
+    { text = string.rep(" ", item.bufnr_padding) .. " ", hl = "Normal" },
     {
-      text = item.path ~= "" and ("  " .. item.path) or "",
-      hl = "Comment",
+      text = item.flag,
+      hl = item.flag == "%" and "Special"
+        or item.flag == "#" and "Identifier"
+        or "Normal",
     },
+    { text = item.flags, hl = "Comment" },
+    { text = " ", hl = "Normal" },
+    { text = item.icon .. " ", hl = item.icon_hl },
+    { text = item.name, hl = "Normal" },
   }
 end
 
@@ -67,8 +98,9 @@ local function filter_fn(ctx)
   local names = {}
   local lookup = {}
   for _, item in ipairs(ctx.items) do
-    names[#names + 1] = item.name
-    lookup[item.name] = item
+    local key = item.name .. " " .. item.path
+    names[#names + 1] = key
+    lookup[key] = item
   end
 
   local matches = vim.fn.matchfuzzy(names, ctx.input)
@@ -90,9 +122,31 @@ local function get_replacement_buf(current)
   return vim.api.nvim_create_buf(false, true)
 end
 
-return function()
+local function bind(keyset, keys, callback)
+  for _, key in ipairs(type(keys) == "string" and { keys } or keys or {}) do
+    keyset("i", key, callback)
+  end
+end
+
+---@class minibuffer.builtin.BuffersKeymaps
+---@field split? string|string[]
+---@field vsplit? string|string[]
+---@field delete? string|string[]
+
+---@class minibuffer.builtin.BuffersOpts
+---@field keymaps? minibuffer.builtin.BuffersKeymaps
+
+---@param opts? minibuffer.builtin.BuffersOpts
+return function(opts)
   require("minibuffer.internal.guard").check()
 
+  opts = vim.tbl_deep_extend(
+    "force",
+    { keymaps = { split = "<C-s>", vsplit = "<C-v>", delete = "<C-d>" } },
+    opts or {}
+  )
+  local keymaps = opts.keymaps
+  local select_keymaps = require("minibuffer.config").select.keymaps
   local active_win
   local buffers = gather_buffers()
   local minibuffer = require("minibuffer")
@@ -151,54 +205,59 @@ return function()
         return
       end
 
-      keyset("i", "<C-s>", function()
+      bind(keyset, keymaps.split, function()
         local selected = sess:get_selected()
         if selected then
-          if selected then
-            sess:close(function()
-              vim.cmd("split")
-              vim.api.nvim_set_current_buf(selected.bufnr)
-            end)
-          end
+          sess:close(function()
+            vim.cmd("split")
+            vim.api.nvim_set_current_buf(selected.bufnr)
+          end)
         end
       end)
-      keyset("i", "<C-v>", function()
+      bind(keyset, keymaps.vsplit, function()
         local selected = sess:get_selected()
         if selected then
-          if selected then
-            sess:close(function()
-              vim.cmd("vsplit")
-              vim.api.nvim_set_current_buf(selected.bufnr)
-            end)
-          end
+          sess:close(function()
+            vim.cmd("vsplit")
+            vim.api.nvim_set_current_buf(selected.bufnr)
+          end)
         end
       end)
-      keyset("i", "<C-d>", function()
+      bind(keyset, keymaps.delete, function()
         local selected = sess:get_selected()
-        if selected then
-          if selected and vim.api.nvim_buf_is_valid(selected.bufnr) then
-            update_preview_win(active_win, get_replacement_buf(selected.bufnr))
-            vim.api.nvim_buf_delete(selected.bufnr, {})
+        if selected and vim.api.nvim_buf_is_valid(selected.bufnr) then
+          update_preview_win(active_win, get_replacement_buf(selected.bufnr))
+          vim.api.nvim_buf_delete(selected.bufnr, {})
 
-            -- Remove buffer from list
-            local new_buffer_list = {}
-            for _, item in ipairs(buffers) do
-              if item.bufnr ~= selected.bufnr then
-                new_buffer_list[#new_buffer_list + 1] = item
-              end
+          -- Remove buffer from list
+          local new_buffer_list = {}
+          for _, item in ipairs(buffers) do
+            if item.bufnr ~= selected.bufnr then
+              new_buffer_list[#new_buffer_list + 1] = item
             end
-            buffers = new_buffer_list
-
-            sess:refresh_results()
           end
+          buffers = new_buffer_list
+
+          sess:refresh_results()
         end
       end)
     end,
     footer_fn = function(ctx)
+      local label = require("minibuffer.internal.util").keymap_label
       return {
         { #ctx.items .. " items", "Normal" },
         {
-          " C-x toggle, C-a toggle-all, C-s split, C-v vsplit, C-d delete, C-y accept, C-n next, C-p prev",
+          " C-x toggle, C-a toggle-all, "
+            .. label(keymaps.split)
+            .. " split, "
+            .. label(keymaps.vsplit)
+            .. " vsplit, "
+            .. label(keymaps.delete)
+            .. " delete, C-y accept, "
+            .. label(select_keymaps.next)
+            .. " next, "
+            .. label(select_keymaps.previous)
+            .. " prev",
           "Comment",
         },
       }

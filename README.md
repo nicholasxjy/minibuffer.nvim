@@ -131,6 +131,25 @@ vim.keymap.set(
   require("minibuffer.builtin.buffers"),
   { desc = "Find buffers" }
 )
+
+The buffers picker uses fzf-lua's buffer layout: `[number]` followed by the
+current/alternate, loaded, read-only, and modified flags, an optional file icon,
+and the path. Split, vertical split, and delete actions accept one key or a list
+of keys:
+
+```lua
+require("minibuffer.builtin.buffers")({
+  keymaps = {
+    split = { "<C-s>", "<C-w>s" },
+    vsplit = { "<C-v>", "<C-w>v" },
+    delete = { "<C-d>", "<C-w>d" },
+  },
+})
+```
+
+Use `{}` to disable an action's mappings. The picker still uses the global
+`select.keymaps.next` and `select.keymaps.previous` settings for navigation.
+
 vim.keymap.set(
   "n",
   "<leader>ff",
