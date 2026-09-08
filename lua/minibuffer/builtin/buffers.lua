@@ -132,6 +132,8 @@ end
 ---@field split? string|string[]
 ---@field vsplit? string|string[]
 ---@field delete? string|string[]
+---@field next? string|string[]
+---@field previous? string|string[]
 
 ---@class minibuffer.builtin.BuffersOpts
 ---@field keymaps? minibuffer.builtin.BuffersKeymaps
@@ -140,13 +142,18 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = vim.tbl_deep_extend(
-    "force",
-    { keymaps = { split = "<C-s>", vsplit = "<C-v>", delete = "<C-d>" } },
-    opts or {}
-  )
-  local keymaps = opts.keymaps
   local select_keymaps = require("minibuffer.config").select.keymaps
+  local keymaps = vim.tbl_deep_extend(
+    "force",
+    {
+      split = "<C-s>",
+      vsplit = "<C-v>",
+      delete = "<C-d>",
+      next = select_keymaps.next,
+      previous = select_keymaps.previous,
+    },
+    opts and opts.keymaps or {}
+  )
   local active_win
   local buffers = gather_buffers()
   local minibuffer = require("minibuffer")
@@ -154,6 +161,7 @@ return function(opts)
 
   minibuffer.select({
     resumable = true,
+    keymaps = { next = keymaps.next, previous = keymaps.previous },
     prompt = "Buffers: ",
     items = buffers,
     multi = true,
@@ -254,9 +262,9 @@ return function(opts)
             .. " vsplit, "
             .. label(keymaps.delete)
             .. " delete, C-y accept, "
-            .. label(select_keymaps.next)
+            .. label(keymaps.next)
             .. " next, "
-            .. label(select_keymaps.previous)
+            .. label(keymaps.previous)
             .. " prev",
           "Comment",
         },
