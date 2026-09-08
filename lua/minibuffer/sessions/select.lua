@@ -32,6 +32,7 @@ end
 ---@alias minibuffer.core.SelectFetchFn fun(input:string, cb:fun(items: any[]|nil, err:any|nil))
 ---@alias minibuffer.core.SelectFilterFn fun(ctx:minibuffer.core.SelectContext): any[]
 ---@alias minibuffer.core.SelectFooterFn fun(ctx:minibuffer.core.SelectContext): any[]
+---@alias minibuffer.core.SelectHeaderFn fun(ctx:minibuffer.core.SelectContext, width:integer): minibuffer.util.HighlightLine[]
 ---@alias minibuffer.core.SelectAcceptCallback fun(selection: {item:any, index: integer}[])
 ---@alias minibuffer.core.SelectStartCallback fun(
 ---  session: minibuffer.core.SelectSession,
@@ -41,6 +42,8 @@ end
 ---@field prompt string
 ---@field highlights table<string, string>
 ---@field footer_pos "left"|"center"|"right"
+---@field prompt_position "top"|"bottom"
+---@field header_fn minibuffer.core.SelectHeaderFn|nil
 ---@field keymaps minibuffer.config.select.keymaps
 ---@field max_height integer
 ---@field multi boolean
@@ -65,6 +68,7 @@ end
 ---@field _scroll_offset integer
 ---@field _loading boolean
 ---@field _fetch_generation integer
+---@field _header_height integer
 local SelectSession = {}
 SelectSession.__index = SelectSession
 SelectSession = SelectSession
@@ -80,6 +84,10 @@ SelectSession = SelectSession
 ---@field highlights table<string, string>|nil
 ---Alignment of the action hints.
 ---@field footer_pos "left"|"center"|"right"|nil
+---Place the input above or below the results.
+---@field prompt_position "top"|"bottom"|nil
+---Wrapped hint lines between a top input and the results, separated by blank lines.
+---@field header_fn minibuffer.core.SelectHeaderFn|nil
 ---The max height the minibuffer can grow to
 ---@field max_height integer|nil
 ---Whether the user will be allowed to select multiple items
@@ -126,6 +134,8 @@ function SelectSession.new(opts)
     prompt = opts.prompt or "Select: ",
     highlights = opts.highlights or {},
     footer_pos = opts.footer_pos or "right",
+    prompt_position = opts.prompt_position or "bottom",
+    header_fn = opts.header_fn,
     max_height = opts.max_height or 15,
     multi = opts.multi == true,
     dynamic_height = opts.dynamic_height == true,
@@ -164,6 +174,7 @@ function SelectSession.new(opts)
     _scroll_offset = 0,
     _loading = false,
     _fetch_generation = 0,
+    _header_height = 0,
   }, SelectSession)
   assert(self.fetch_fn ~= nil, "Must provide fetch_fn")
   assert(self.filter_fn ~= nil, "Must provide filter_fn")
@@ -200,6 +211,7 @@ function SelectSession:pre_start()
   util.wipe_cmd_buffer()
 
   self._closed = false
+  self._header_height = 0
   state.win_states = util.get_window_states()
 
   -- Setup display buffer and window
@@ -218,8 +230,12 @@ function SelectSession:pre_start()
     zindex = vim.api.nvim_win_get_config(cmd_win).zindex + 2,
     border = { " ", "", " ", " ", " ", " ", " ", " " },
   }
-  display_winopts.footer = self.footer_fn(self:get_ctx())
-  display_winopts.footer_pos = self.footer_pos
+  if self.prompt_position == "top" then
+    display_winopts.border = "none"
+  else
+    display_winopts.footer = self.footer_fn(self:get_ctx())
+    display_winopts.footer_pos = self.footer_pos
+  end
   self._display.win = vim.api.nvim_open_win(self._display.buf, false, display_winopts)
   vim.api.nvim_win_call(self._display.win, function()
     vim.api.nvim_set_option_value("filetype", "", { scope = "local" })
@@ -296,6 +312,17 @@ function SelectSession:render()
 
   -- Calculate height based on the suggestions, loading state and max height
   local prev_display_height = vim.api.nvim_win_get_height(self._display.win)
+    - self._header_height
+  local ctx = self:get_ctx()
+  local lines_data = {}
+  if self.prompt_position == "top" then
+    lines_data[1] = {}
+    if self.header_fn then
+      vim.list_extend(lines_data, self.header_fn(ctx, vim.o.columns))
+      lines_data[#lines_data + 1] = {}
+    end
+  end
+  self._header_height = #lines_data
   local total = #self._items
   local desired_height =
     math.max(1, math.min(self.max_height, total + (self._loading and 1 or 0)))
@@ -303,6 +330,11 @@ function SelectSession:render()
   if not self.dynamic_height then
     display_height = math.max(prev_display_height, desired_height)
     display_height = math.min(display_height, self.max_height)
+  end
+  if self.prompt_position == "top" then
+    -- Reserve room for the input, hints and at least one editor row.
+    display_height =
+      math.max(1, math.min(display_height, vim.o.lines - self._header_height - 2))
   end
 
   -- Correct for scroll position
@@ -323,20 +355,36 @@ function SelectSession:render()
     end
   end
 
-  vim.api.nvim_win_set_config(self._display.win, {
-    footer = self.footer_fn(self:get_ctx()),
-  })
-
-  -- Set heights
-  util.set_win_height(self._display.win, display_height)
-  util.set_win_height(self._entry.win, display_height + 2)
-  util.set_cmdheight(state.win_states, config.dynamic_window_resize, display_height + 2)
+  if self.prompt_position == "top" then
+    local body_height = math.min(vim.o.lines - 2, self._header_height + display_height)
+    local height = body_height + 1
+    util.set_cmdheight(state.win_states, config.dynamic_window_resize, height)
+    vim.api.nvim_win_set_config(self._entry.win, {
+      relative = "editor",
+      row = vim.o.lines - height,
+      col = 0,
+      width = vim.o.columns,
+      height = 1,
+    })
+    vim.api.nvim_win_set_config(self._display.win, {
+      relative = "editor",
+      row = vim.o.lines - body_height,
+      col = 0,
+      width = vim.o.columns,
+      height = body_height,
+    })
+  else
+    vim.api.nvim_win_set_config(self._display.win, {
+      footer = self.footer_fn(ctx),
+    })
+    util.set_win_height(self._display.win, display_height)
+    util.set_win_height(self._entry.win, display_height + 2)
+    util.set_cmdheight(state.win_states, config.dynamic_window_resize, display_height + 2)
+  end
 
   -- Build display output
   local start_idx = self._scroll_offset + 1
   local end_idx = math.min(total, start_idx + display_height - 1)
-  local lines_data = {}
-  local ctx = self:get_ctx()
   for i = start_idx, end_idx do
     lines_data[#lines_data + 1] = self.format_fn(self._items[i], ctx, i)
   end
@@ -352,7 +400,7 @@ function SelectSession:render()
       vim.api.nvim_buf_set_extmark,
       self._display.buf,
       state.ns,
-      self._current_index - start_idx,
+      self._header_height + self._current_index - start_idx,
       0,
       { line_hl_group = self.highlights.selection or "MinibufferSelection" }
     )
@@ -361,9 +409,16 @@ function SelectSession:render()
   -- Highlight current & multi selections (only if within visible items range)
   for _, i in ipairs(self._selected_indices) do
     if i ~= self._current_index and i >= start_idx and i <= end_idx then
-      pcall(vim.api.nvim_buf_set_extmark, self._display.buf, state.ns, i - start_idx, 0, {
-        line_hl_group = self.highlights.multi_selection or "MinibufferMultiSelected",
-      })
+      pcall(
+        vim.api.nvim_buf_set_extmark,
+        self._display.buf,
+        state.ns,
+        self._header_height + i - start_idx,
+        0,
+        {
+          line_hl_group = self.highlights.multi_selection or "MinibufferMultiSelected",
+        }
+      )
     end
   end
 

@@ -173,14 +173,21 @@ vim.keymap.set("n", "<leader>fq", function()
 end, { desc = "Find in quickfix" })
 ```
 
-The buffers picker uses fzf-lua's buffer layout: `[number]` followed by the
-current/alternate, loaded, read-only, and modified flags, an optional file icon,
-and `path:line`. The current and alternate buffers appear first. The list uses
+The buffers picker displays the input, wrapping action hints, and results from
+top to bottom, with a blank line between sections. Hints wrap to the window
+width and keep complete actions together when possible. The list shows
+`[number]`, current/alternate, loaded, read-only, and modified flags, a file icon,
+and `filename:line` followed by an aligned directory column. Set
+`filename_first = false` to display `path:line` instead.
+The current and alternate buffers appear first. The list uses
 fzf-lua's number, flag, line-number, cursor, multi-select marker, and fuzzy-match
 highlights; Unicode filenames are supported. The `Buffers> ` prompt and
 `:: <key> to action` hints use the corresponding `FzfLua*` groups, with separate
-colors for keys and descriptions and a filtered/total/selected count. Disabled
-actions are omitted from the hints. Existing theme definitions are preserved;
+colors for keys and descriptions and a filtered/total/selected count. Directories
+use `FzfLuaDirPart` (the same group as fzf-lua's `path.filename_first` formatter).
+The current row is bold, including its icon, flags, and directory, while keeping
+each field's color. Disabled actions are omitted from the hints. Existing theme
+definitions are preserved;
 when fzf-lua is absent, the picker defines matching default colors itself.
 It remains a native minibuffer picker and does not require fzf-lua or fzf.
 
@@ -189,6 +196,7 @@ list of keys:
 
 ```lua
 require("minibuffer.builtin.buffers")({
+  filename_first = true, -- Default; use false for path-first display
   keymaps = {
     split = { "<C-s>", "<C-w>s" },
     vsplit = { "<C-v>", "<C-w>v" },

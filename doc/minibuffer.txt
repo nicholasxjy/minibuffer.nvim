@@ -157,8 +157,8 @@ minibuffer.core.ChangeCallback                  *minibuffer.core.ChangeCallback*
 minibuffer.util.HighlightChunk                  *minibuffer.util.HighlightChunk*
 
     Fields: ~
-        {text}  (string)      Text to display
-        {hl}    (string|nil)  Highlight for the text
+        {text}  (string)               Text to display
+        {hl}    (string|string[]|nil)  Highlight for the text
 
 
 minibuffer.util.HighlightLine                    *minibuffer.util.HighlightLine*
@@ -617,6 +617,12 @@ minibuffer.core.SelectFooterFn                  *minibuffer.core.SelectFooterFn*
         fun(ctx:minibuffer.core.SelectContext):any[]
 
 
+minibuffer.core.SelectHeaderFn                  *minibuffer.core.SelectHeaderFn*
+
+    Type: ~
+        fun(ctx:minibuffer.core.SelectContext,width:integer):minibuffer.util.HighlightLine[]
+
+
 minibuffer.core.SelectAcceptCallback      *minibuffer.core.SelectAcceptCallback*
 
     Type: ~
@@ -638,6 +644,8 @@ minibuffer.core.SelectSession : minibuffer.core.Session
         {prompt}             (string)
         {highlights}         (table<string,string>)
         {footer_pos}         ("left"|"center"|"right")
+        {prompt_position}    ("top"|"bottom")
+        {header_fn}          (minibuffer.core.SelectHeaderFn|nil)
         {keymaps}            (minibuffer.config.select.keymaps)
         {max_height}         (integer)
         {multi}              (boolean)
@@ -662,6 +670,7 @@ minibuffer.core.SelectSession : minibuffer.core.Session
         {_scroll_offset}     (integer)
         {_loading}           (boolean)
         {_fetch_generation}  (integer)
+        {_header_height}     (integer)
 
 
 minibuffer.core.SelectSessionOpts            *minibuffer.core.SelectSessionOpts*
@@ -672,6 +681,8 @@ minibuffer.core.SelectSessionOpts            *minibuffer.core.SelectSessionOpts*
         {prompt}          (string|nil)                               The prompt string to display to the user
         {highlights}      (table<string,string>|nil)                Per-session normal, query, prompt, selection and multi-selection groups.
         {footer_pos}      ("left"|"center"|"right"|nil)               Alignment of the action hints.
+        {prompt_position} ("top"|"bottom"|nil)                       Place the input above or below the results.
+        {header_fn}       (minibuffer.core.SelectHeaderFn|nil)       Wrapped hint lines between a top input and the results, separated by blank lines.
         {max_height}      (integer|nil)                              The max height the minibuffer can grow to
         {multi}           (boolean|nil)                              Whether the user will be allowed to select multiple items
         {dynamic_height}  (boolean|nil)                              Whether the minibuffer should ever shrink as the items decrease

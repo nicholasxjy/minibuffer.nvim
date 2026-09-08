@@ -32,7 +32,7 @@
 ---Text to display
 ---@field text string
 ---Highlight for the text
----@field hl string|nil
+---@field hl string|string[]|nil
 
 ---@alias minibuffer.util.HighlightLine minibuffer.util.HighlightChunk[]
 

@@ -67,6 +67,7 @@ local function gather_buffers()
     item.bufnr_padding = number_width - #item.bufnr_label
     item.icon, item.icon_hl = get_file_icon(item.name)
   end
+  ui.prepare(items)
 
   table.sort(items, function(a, b)
     if a.flag ~= b.flag and (a.flag == "%" or b.flag == "%") then
@@ -121,11 +122,14 @@ end
 
 ---@class minibuffer.builtin.BuffersOpts
 ---@field keymaps? minibuffer.builtin.BuffersKeymaps
+---@field filename_first? boolean Show the filename before its directory (default true).
 
 ---@param opts? minibuffer.builtin.BuffersOpts
 return function(opts)
   require("minibuffer.internal.guard").check()
 
+  opts = opts or {}
+  vim.validate("filename_first", opts.filename_first, "boolean", true)
   ui.setup()
   local select_keymaps = require("minibuffer.config").select.keymaps
   local keymaps = vim.tbl_deep_extend("force", {
@@ -148,10 +152,13 @@ return function(opts)
       normal = "FzfLuaFzfNormal",
       query = "FzfLuaFzfQuery",
       prompt = "FzfLuaFzfPrompt",
-      selection = "FzfLuaFzfCursorLine",
+      selection = "MinibufferBuffersSelection",
       multi_selection = "FzfLuaFzfNormal",
     },
-    footer_pos = "left",
+    prompt_position = "top",
+    header_fn = function(ctx, width)
+      return ui.hints(ctx, keymaps, #buffers, width)
+    end,
     items = buffers,
     multi = true,
     dynamic_height = false,
@@ -159,7 +166,9 @@ return function(opts)
     fetch_fn = function(_, cb)
       cb(buffers)
     end,
-    format_fn = ui.format,
+    format_fn = function(item, ctx, index)
+      return ui.format(item, ctx, index, opts.filename_first)
+    end,
     filter_fn = filter_fn,
     on_change = function(_, item)
       if not active_win then
@@ -238,9 +247,6 @@ return function(opts)
           sess:refresh_results()
         end
       end)
-    end,
-    footer_fn = function(ctx)
-      return ui.footer(ctx, keymaps, #buffers)
     end,
   })
 end
