@@ -361,6 +361,15 @@ fzf_mb({
 })
 ```
 
+Grep results share a filename-first header for each file, with matching line
+numbers and content beneath it, similar to fff. Every match remains individually
+selectable for preview, opening, and quickfix. Results keep the search command's
+file order; custom commands should emit each file's matches together.
+This requires `fzf >= 0.53`.
+Call `fzf_mb.live_grep()` directly, or use `require("fzf-lua").live_grep()`
+after the setup above. Set `grep = { multiline = false, formatter = false }`
+in setup to restore the native single-line layout.
+
 The `files` and `global` wrappers enable fzf-lua's builtin previewer hidden by
 default, with a vertical preview above the results (`up:40%`) at the top of the
 editor by default (an explicit `winopts.row` still wins). Press fzf-lua's

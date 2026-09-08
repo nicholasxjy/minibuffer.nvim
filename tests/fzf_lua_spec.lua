@@ -20,6 +20,9 @@ local function with_fake_fzf(run, fake_opts)
     setup = function(opts)
       capture.setup_opts = opts
     end,
+    live_grep = function(opts)
+      capture.grep_opts = opts
+    end,
     actions = { toggle_ignore = toggle_ignore },
     config = {
       normalize_opts = function(opts, provider)
@@ -177,8 +180,27 @@ test("fzf setup keeps the minibuffer window style", function()
     eq(true, capture.setup_opts.fzf_opts["--no-separator"])
     eq("FloatBorder", capture.setup_opts.hls.border)
     eq("Normal", capture.setup_opts.hls.normal)
+    eq(true, capture.setup_opts.grep.multiline)
+    eq("path.filename_first", capture.setup_opts.grep.formatter)
     eq("minibuffer", capture.setup_opts.winopts().relative)
     eq(true, capture.setup_opts.winopts().use_minibuffer)
+  end)
+end)
+
+test("fzf live grep groups entries and preserves caller options", function()
+  with_fake_fzf(function(integration, capture)
+    integration.live_grep({ search = "needle" })
+    eq(true, capture.grep_opts.multiline)
+    eq("path.filename_first", capture.grep_opts.formatter)
+    eq("needle", capture.grep_opts.search)
+    integration.live_grep({ multiline = false, formatter = false })
+    eq(false, capture.grep_opts.multiline)
+    eq(false, capture.grep_opts.formatter)
+    integration.setup({ grep = { multiline = false, formatter = false } })
+    eq(false, capture.setup_opts.grep.multiline)
+    eq(false, capture.setup_opts.grep.formatter)
+    integration.live_grep()
+    eq(true, capture.grep_opts.multiline)
   end)
 end)
 

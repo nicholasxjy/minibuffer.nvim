@@ -40,6 +40,54 @@ local DEFAULT_PREVIEW = {
     vertical = "up:40%",
   },
 }
+local DEFAULT_GREP = {
+  multiline = true,
+  formatter = "path.filename_first",
+  -- Keep each match selectable while hiding its original entry from the list.
+  fzf_opts = {
+    ["--delimiter"] = "\31",
+    ["--with-nth"] = "2..",
+    ["--nth"] = "2..",
+    ["--no-sort"] = true,
+    ["--layout"] = "reverse",
+  },
+  _fmt = {
+    _from = function(line)
+      return line:match("^(.-)\31") or line
+    end,
+  },
+  fn_preprocess = function(opts)
+    opts.__minibuffer_grep_file = nil
+    return require("fzf-lua.make_entry").preprocess(opts)
+  end,
+  fn_transform = function(line, opts)
+    local entry = require("fzf-lua.make_entry")
+    if not opts.multiline then
+      return entry.file(line, opts)
+    end
+    local utils = require("fzf-lua.utils")
+    local number = "([\27%[%d;m]+)"
+    local path, lnum, _, content =
+      line:match("^(.-):" .. number .. ":" .. number .. ":(.*)$")
+    if not path then
+      path, lnum, content = line:match("^(.-):" .. number .. ":(.*)$")
+    end
+    if not path then
+      return entry.file(line, opts)
+    end
+    local filename = utils.strip_ansi_coloring(path)
+    local header = entry.file(path, opts)
+    if not header then
+      return nil
+    end
+    local display = "    " .. lnum .. " │ " .. content
+    if filename ~= opts.__minibuffer_grep_file then
+      display = header .. "\n" .. display
+    end
+    opts.__minibuffer_grep_file = filename
+    return line .. "\31" .. display
+  end,
+}
 local RESUME_RETENTION_MS = 5 * 60 * 1000
 local override_opts = {
   fzf_opts = {
@@ -83,7 +131,21 @@ function M.setup(opts)
   if type(FzfLua.setup) ~= "function" then
     error("Your version of fzf-lua is missing the `setup` interface.")
   end
-  return FzfLua.setup(vim.tbl_deep_extend("force", opts or {}, override_opts))
+  return FzfLua.setup(
+    vim.tbl_deep_extend("force", { grep = DEFAULT_GREP }, opts or {}, override_opts)
+  )
+end
+
+---Open live grep with matches grouped beneath a shared file header.
+---@param opts? table
+function M.live_grep(opts)
+  return FzfLua.live_grep(vim.tbl_deep_extend(
+    "force",
+    {},
+    DEFAULT_GREP,
+    (FzfLua.config.setup_opts or {}).grep or {},
+    opts or {}
+  ))
 end
 
 local function retire(session)
