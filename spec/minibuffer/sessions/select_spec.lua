@@ -487,8 +487,8 @@ describe("minibuffer.sessions.select", function()
 
       session:render()
 
-      assert.spy(format_fn).called_with("one")
-      assert.spy(format_fn).called_with("two")
+      assert.spy(format_fn).called_with("one", session:get_ctx(), 1)
+      assert.spy(format_fn).called_with("two", session:get_ctx(), 2)
 
       assert.stub(util.write_highlighted_lines).called_with(display_buf, state.ns, {
         { { "one", "String" } },

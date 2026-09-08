@@ -133,7 +133,7 @@ minibuffer.core.ItemCompareFn                    *minibuffer.core.ItemCompareFn*
 minibuffer.core.FormatFn                              *minibuffer.core.FormatFn*
 
     Type: ~
-        fun(item:any):minibuffer.util.HighlightLine
+        fun(item:any,ctx?:minibuffer.core.SelectContext,index?:integer):minibuffer.util.HighlightLine
 
 
 minibuffer.core.CancelCallback                  *minibuffer.core.CancelCallback*
@@ -636,6 +636,8 @@ minibuffer.core.SelectSession : minibuffer.core.Session
 
     Fields: ~
         {prompt}             (string)
+        {highlights}         (table<string,string>)
+        {footer_pos}         ("left"|"center"|"right")
         {keymaps}            (minibuffer.config.select.keymaps)
         {max_height}         (integer)
         {multi}              (boolean)
@@ -668,6 +670,8 @@ minibuffer.core.SelectSessionOpts            *minibuffer.core.SelectSessionOpts*
         {keymaps}         (minibuffer.config.select.keymaps|nil)     Navigation mappings; each action replaces the global default.
         {resumable}       (boolean|nil)                              Whether this specific session is reusable
         {prompt}          (string|nil)                               The prompt string to display to the user
+        {highlights}      (table<string,string>|nil)                Per-session normal, query, prompt, selection and multi-selection groups.
+        {footer_pos}      ("left"|"center"|"right"|nil)               Alignment of the action hints.
         {max_height}      (integer|nil)                              The max height the minibuffer can grow to
         {multi}           (boolean|nil)                              Whether the user will be allowed to select multiple items
         {dynamic_height}  (boolean|nil)                              Whether the minibuffer should ever shrink as the items decrease

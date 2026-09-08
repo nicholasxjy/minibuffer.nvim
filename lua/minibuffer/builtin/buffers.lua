@@ -1,3 +1,5 @@
+local ui = require("minibuffer.builtin.buffers-ui")
+
 local function update_preview_win(win, buf)
   if not vim.api.nvim_win_is_valid(win) then
     return
@@ -42,18 +44,18 @@ local function gather_buffers()
       local path = info.name
       local name = path ~= "" and vim.fn.fnamemodify(path, ":~:.") or "[No Name]"
       local hidden = info.hidden == 1 and "h" or "a"
-      local flag = info.bufnr == current and "%"
-        or info.bufnr == alternate and "#"
-        or " "
+      local flag = info.bufnr == current and "%" or info.bufnr == alternate and "#" or " "
       local readonly = vim.bo[info.bufnr].readonly and "=" or " "
       local changed = info.changed == 1 and "+" or " "
       items[#items + 1] = {
         bufnr = info.bufnr,
         path = path,
         name = name,
+        search_text = name .. " " .. path,
         flag = flag,
         flags = hidden .. readonly .. changed,
         lastused = info.lastused or 0,
+        lnum = info.lnum or 1,
       }
       max_bufnr = math.max(max_bufnr, info.bufnr)
     end
@@ -67,50 +69,32 @@ local function gather_buffers()
   end
 
   table.sort(items, function(a, b)
-    return a.lastused > b.lastused
+    if a.flag ~= b.flag and (a.flag == "%" or b.flag == "%") then
+      return a.flag == "%"
+    end
+    if a.flag ~= b.flag and (a.flag == "#" or b.flag == "#") then
+      return a.flag == "#"
+    end
+    return a.lastused == b.lastused and a.bufnr < b.bufnr or a.lastused > b.lastused
   end)
 
   return items
 end
 
-local function format_fn(item)
-  return {
-    { text = item.bufnr_label, hl = "Number" },
-    { text = string.rep(" ", item.bufnr_padding) .. " ", hl = "Normal" },
-    {
-      text = item.flag,
-      hl = item.flag == "%" and "Special"
-        or item.flag == "#" and "Identifier"
-        or "Normal",
-    },
-    { text = item.flags, hl = "Comment" },
-    { text = " ", hl = "Normal" },
-    { text = item.icon .. " ", hl = item.icon_hl },
-    { text = item.name, hl = "Normal" },
-  }
-end
-
 local function filter_fn(ctx)
+  for _, item in ipairs(ctx.items) do
+    item.match_positions = nil
+  end
   if ctx.input == "" then
     return ctx.items
   end
 
-  local names = {}
-  local lookup = {}
-  for _, item in ipairs(ctx.items) do
-    local key = item.name .. " " .. item.path
-    names[#names + 1] = key
-    lookup[key] = item
+  local result = vim.fn.matchfuzzypos(ctx.items, ctx.input, { key = "search_text" })
+  local matches = result[1]
+  for _, item in ipairs(matches) do
+    item.match_positions = vim.fn.matchfuzzypos({ item.name }, ctx.input)[2][1]
   end
-
-  local matches = vim.fn.matchfuzzy(names, ctx.input)
-  local results = {}
-
-  for _, name in ipairs(matches) do
-    results[#results + 1] = lookup[name]
-  end
-
-  return results
+  return matches
 end
 
 local function get_replacement_buf(current)
@@ -142,18 +126,15 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
+  ui.setup()
   local select_keymaps = require("minibuffer.config").select.keymaps
-  local keymaps = vim.tbl_deep_extend(
-    "force",
-    {
-      split = "<C-s>",
-      vsplit = "<C-v>",
-      delete = "<C-d>",
-      next = select_keymaps.next,
-      previous = select_keymaps.previous,
-    },
-    opts and opts.keymaps or {}
-  )
+  local keymaps = vim.tbl_deep_extend("force", {
+    split = "<C-s>",
+    vsplit = "<C-v>",
+    delete = "<C-d>",
+    next = select_keymaps.next,
+    previous = select_keymaps.previous,
+  }, opts and opts.keymaps or {})
   local active_win
   local buffers = gather_buffers()
   local minibuffer = require("minibuffer")
@@ -162,7 +143,15 @@ return function(opts)
   minibuffer.select({
     resumable = true,
     keymaps = { next = keymaps.next, previous = keymaps.previous },
-    prompt = "Buffers: ",
+    prompt = "Buffers> ",
+    highlights = {
+      normal = "FzfLuaFzfNormal",
+      query = "FzfLuaFzfQuery",
+      prompt = "FzfLuaFzfPrompt",
+      selection = "FzfLuaFzfCursorLine",
+      multi_selection = "FzfLuaFzfNormal",
+    },
+    footer_pos = "left",
     items = buffers,
     multi = true,
     dynamic_height = false,
@@ -170,7 +159,7 @@ return function(opts)
     fetch_fn = function(_, cb)
       cb(buffers)
     end,
-    format_fn = format_fn,
+    format_fn = ui.format,
     filter_fn = filter_fn,
     on_change = function(_, item)
       if not active_win then
@@ -251,24 +240,7 @@ return function(opts)
       end)
     end,
     footer_fn = function(ctx)
-      local label = require("minibuffer.internal.util").keymap_label
-      return {
-        { #ctx.items .. " items", "Normal" },
-        {
-          " C-x toggle, C-a toggle-all, "
-            .. label(keymaps.split)
-            .. " split, "
-            .. label(keymaps.vsplit)
-            .. " vsplit, "
-            .. label(keymaps.delete)
-            .. " delete, C-y accept, "
-            .. label(keymaps.next)
-            .. " next, "
-            .. label(keymaps.previous)
-            .. " prev",
-          "Comment",
-        },
-      }
+      return ui.footer(ctx, keymaps, #buffers)
     end,
   })
 end

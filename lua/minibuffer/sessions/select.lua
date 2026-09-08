@@ -39,6 +39,8 @@ end
 
 ---@class minibuffer.core.SelectSession : minibuffer.core.Session
 ---@field prompt string
+---@field highlights table<string, string>
+---@field footer_pos "left"|"center"|"right"
 ---@field keymaps minibuffer.config.select.keymaps
 ---@field max_height integer
 ---@field multi boolean
@@ -74,6 +76,10 @@ SelectSession = SelectSession
 ---@field resumable boolean|nil
 ---The prompt string to display to the user
 ---@field prompt string|nil
+---Per-session normal, query, prompt, selection and multi-selection groups.
+---@field highlights table<string, string>|nil
+---Alignment of the action hints.
+---@field footer_pos "left"|"center"|"right"|nil
 ---The max height the minibuffer can grow to
 ---@field max_height integer|nil
 ---Whether the user will be allowed to select multiple items
@@ -118,6 +124,8 @@ function SelectSession.new(opts)
   local self = setmetatable({
     keymaps = keymaps,
     prompt = opts.prompt or "Select: ",
+    highlights = opts.highlights or {},
+    footer_pos = opts.footer_pos or "right",
     max_height = opts.max_height or 15,
     multi = opts.multi == true,
     dynamic_height = opts.dynamic_height == true,
@@ -211,7 +219,7 @@ function SelectSession:pre_start()
     border = { " ", "", " ", " ", " ", " ", " ", " " },
   }
   display_winopts.footer = self.footer_fn(self:get_ctx())
-  display_winopts.footer_pos = "right"
+  display_winopts.footer_pos = self.footer_pos
   self._display.win = vim.api.nvim_open_win(self._display.buf, false, display_winopts)
   vim.api.nvim_win_call(self._display.win, function()
     vim.api.nvim_set_option_value("filetype", "", { scope = "local" })
@@ -224,7 +232,11 @@ function SelectSession:pre_start()
     vim.api.nvim_set_option_value("buftype", "nofile", { scope = "local" })
     vim.api.nvim_set_option_value(
       "winhighlight",
-      "NormalFloat:Normal,FloatBorder:Normal,FloatFooter:Normal",
+      ("NormalFloat:%s,FloatBorder:%s,FloatFooter:%s"):format(
+        self.highlights.normal or "Normal",
+        self.highlights.normal or "Normal",
+        self.highlights.normal or "Normal"
+      ),
       { scope = "local" }
     )
   end)
@@ -252,7 +264,12 @@ function SelectSession:pre_start()
     border = "none",
   })
   vim.wo[self._entry.win].wrap = false
-  vim.wo[self._entry.win].winhighlight = "Normal:MinibufferPrompt"
+  vim.wo[self._entry.win].winhighlight = self.highlights.query
+      and ("Normal:%s,NormalFloat:%s"):format(
+        self.highlights.query,
+        self.highlights.query
+      )
+    or "Normal:MinibufferPrompt"
   pcall(vim.api.nvim_win_set_var, self._entry.win, "minibuffer", true)
 end
 
@@ -264,6 +281,17 @@ function SelectSession:render()
 
   if not win_state_is_valid(self._entry) or not win_state_is_valid(self._display) then
     return
+  end
+
+  if self.highlights.prompt then
+    vim.api.nvim_buf_clear_namespace(self._entry.buf, state.ns, 0, -1)
+    local line = vim.api.nvim_buf_get_lines(self._entry.buf, 0, 1, false)[1] or ""
+    if line:sub(1, #self.prompt) == self.prompt then
+      vim.api.nvim_buf_set_extmark(self._entry.buf, state.ns, 0, 0, {
+        end_col = #self.prompt,
+        hl_group = self.highlights.prompt,
+      })
+    end
   end
 
   -- Calculate height based on the suggestions, loading state and max height
@@ -308,8 +336,9 @@ function SelectSession:render()
   local start_idx = self._scroll_offset + 1
   local end_idx = math.min(total, start_idx + display_height - 1)
   local lines_data = {}
+  local ctx = self:get_ctx()
   for i = start_idx, end_idx do
-    lines_data[#lines_data + 1] = self.format_fn(self._items[i])
+    lines_data[#lines_data + 1] = self.format_fn(self._items[i], ctx, i)
   end
   if self._loading then
     lines_data[#lines_data + 1] =
@@ -325,7 +354,7 @@ function SelectSession:render()
       state.ns,
       self._current_index - start_idx,
       0,
-      { line_hl_group = "MinibufferSelection" }
+      { line_hl_group = self.highlights.selection or "MinibufferSelection" }
     )
   end
 
@@ -333,7 +362,7 @@ function SelectSession:render()
   for _, i in ipairs(self._selected_indices) do
     if i ~= self._current_index and i >= start_idx and i <= end_idx then
       pcall(vim.api.nvim_buf_set_extmark, self._display.buf, state.ns, i - start_idx, 0, {
-        line_hl_group = "MinibufferMultiSelected",
+        line_hl_group = self.highlights.multi_selection or "MinibufferMultiSelected",
       })
     end
   end
