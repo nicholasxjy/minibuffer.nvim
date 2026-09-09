@@ -72,7 +72,7 @@ vim.api.nvim_buf_set_lines(sess._entry.buf, 0, -1, false, { "Files> 中文" })
 picker.on_start(sess, function() end)
 local body = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
 local row = sess._header_height
-assert(body[row + 1] == "界 中文.lua src", body[row + 1])
+assert(body[row + 1]:match("^界 中文%.lua +│ src$"), body[row + 1])
 assert(body[1] ~= "" and body[row] ~= "", "input, hints, then list with no gaps")
 assert(vim.api.nvim_win_get_position(sess._entry.win)[1] + 1
   == vim.api.nvim_win_get_position(sess._display.win)[1])
@@ -105,5 +105,54 @@ assert(vim.api.nvim_get_hl(0, { name = "FFFGitModified" }).fg == 0x123456)
 picker.on_accept({ { item = by_path[root .. "/space name.lua"] }, { item = matched[1] } })
 assert(vim.api.nvim_buf_get_name(vim.fn.getqflist()[1].bufnr) == root .. "/space name.lua")
 git("status", "--porcelain") -- fixture is still intact after browsing
+local sibling = root .. "-sibling"
+vim.fn.mkdir(sibling, "p")
+vim.fn.writefile({ "outside" }, sibling .. "/outside.lua")
+local outside = vim.api.nvim_create_buf(true, false)
+vim.api.nvim_buf_set_name(outside, sibling .. "/outside.lua")
+local function scan(filter)
+  files({ cwd = root, filter = { cwd = filter }, matcher = { frecency = false },
+    keymaps = { next = { "<C-j>", "<Down>" }, previous = { "<C-k>", "<Up>" },
+      split = { "<C-s>", "<C-w>s" }, vsplit = {}, accept = { "<CR>", "<C-l>" },
+      toggle = { "<C-x>", "<M-x>" }, toggle_all = {}, close = { "<Esc>", "<C-q>" } },
+  })
+  local result
+  picker.fetch_fn("", function(value, err) assert(not err, err); result = value end)
+  assert(vim.wait(5000, function() return result ~= nil end))
+  return result
+end
+for _, item in ipairs(scan(true)) do
+  assert(vim.fs.relpath(root, item.path), "cwd excludes sibling directories and outside buffers")
+end
+local unrestricted = scan(false)
+assert(vim.iter(unrestricted):any(function(item) return item.path == sibling .. "/outside.lua" end))
+local configured = require("minibuffer.sessions.select").new(picker)
+configured:pre_start()
+configured._items = unrestricted
+local keys = {}
+picker.on_start(configured, function(_, key, cb) keys[key] = cb end)
+assert(keys["<C-j>"] and keys["<Down>"] and keys["<C-k>"] and keys["<Up>"])
+assert(keys["<C-s>"] and keys["<C-w>s"] and not keys["<C-v>"])
+assert(keys["<C-l>"] and keys["<M-x>"] and not keys["<C-a>"])
+keys["<C-j>"]()
+assert(configured._current_index == 2)
+keys["<C-k>"]()
+assert(configured._current_index == 1)
+local separator_col
+for _, item in ipairs(unrestricted) do
+  local text = ""
+  for _, chunk in ipairs(picker.format_fn(item, { input = "" })) do text = text .. chunk.text end
+  local first = assert(text:find("│", 1, true))
+  local col = vim.fn.strdisplaywidth(text:sub(1, first - 1))
+  assert(not separator_col or col == separator_col, "filename-first separators align across Unicode paths")
+  separator_col = col
+end
+local hint = ""
+for _, line in ipairs(picker.header_fn({ items = unrestricted, selected_indices = {} }, 120)) do
+  for _, chunk in ipairs(line) do hint = hint .. chunk.text end
+end
+assert(hint:find("ctrl-s/ctrl-w s", 1, true))
+assert(not hint:find("vsplit", 1, true) and not hint:find("toggle-all", 1, true))
+vim.fn.delete(sibling, "rf")
 vim.fn.delete(root, "rf")
 print("standalone files scan/cache, fuzzy ranking, fff layout, Git signs and multi-selection passed")

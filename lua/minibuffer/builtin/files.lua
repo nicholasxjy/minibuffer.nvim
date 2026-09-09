@@ -1,12 +1,13 @@
 local ui = require("minibuffer.builtin.files-ui")
 
 ---@class minibuffer.builtin.FilesOpts
+---@field filter? {cwd?: boolean} Restrict all sources to cwd (default true).
 ---@field cwd? string
 ---@field query? string
 ---@field rg_opts? string[]
 ---@field matcher? minibuffer.fuzzy.Opts Snacks-style scoring options.
 ---@field filename_first? boolean Default true.
----@field keymaps? minibuffer.config.select.keymaps
+---@field keymaps? table<string, string|string[]> next, previous, split, vsplit, accept, toggle, toggle_all, close.
 ---@field git? {status_text_color?: boolean}
 ---@field show_git_status? boolean
 ---@field hl? table<string,string> fff-style highlight names.
@@ -19,6 +20,7 @@ return function(opts)
   local cursor_hl = next(vim.api.nvim_get_hl(0, { name = "CursorLine", link = false }))
     and "CursorLine" or "Visual"
   opts = vim.tbl_deep_extend("force", {
+    filter = { cwd = true },
     filename_first = true, git = { status_text_color = false }, show_git_status = true,
     current_file_label = "(current)", fuzzy_query_highlighting = false,
     matcher = { filename_bonus = true, cwd_bonus = true, frecency = true, history_bonus = false },
@@ -34,10 +36,14 @@ return function(opts)
     vim.validate("matcher." .. name, opts.matcher[name], "boolean")
   end
   vim.validate("git.status_text_color", opts.git.status_text_color, "boolean")
+  vim.validate("filter.cwd", opts.filter.cwd, "boolean")
   opts.cwd = vim.fs.normalize(vim.fn.fnamemodify(opts.cwd or vim.fn.getcwd(), ":p"))
   local current_file = vim.fs.normalize(vim.api.nvim_buf_get_name(0))
   local ranker = require("minibuffer.fuzzy").new(vim.tbl_extend("force", opts.matcher, { cwd = opts.cwd }))
-  local keymaps = vim.tbl_extend("force", require("minibuffer.config").select.keymaps, opts.keymaps or {})
+  local keymaps = vim.tbl_extend("force", {
+    split = "<C-s>", vsplit = "<C-v>", accept = { "<CR>", "<C-y>" },
+    toggle = "<C-x>", toggle_all = "<C-a>", close = { "<Esc>", "<C-c>" },
+  }, require("minibuffer.config").select.keymaps, opts.keymaps or {})
   local buffers, recent = {}, vim.deepcopy(vim.v.oldfiles)
   for _, info in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
     if info.name ~= "" and vim.bo[info.bufnr].buftype == "" then buffers[#buffers + 1] = info end
@@ -58,6 +64,7 @@ return function(opts)
         local function add(path, info, is_recent)
           path = vim.fs.normalize(path)
           if seen[path] then return end
+          if opts.filter.cwd and not vim.fs.relpath(opts.cwd, path) then return end
           if info or is_recent then
             local stat = vim.uv.fs_stat(path)
             if not stat or stat.type ~= "file" then return end
@@ -91,6 +98,7 @@ return function(opts)
           local absolute = path:match("^/") or path:match("^%a:[/\\]")
           add(absolute and path or vim.fs.joinpath(opts.cwd, path))
         end
+        ui.prepare(items)
         cache = not failure and items or nil
         loading = false
         local callbacks = waiting
@@ -127,7 +135,8 @@ return function(opts)
     },
     header_fn = function(ctx, width)
       return require("minibuffer.builtin.buffers-ui").hints(ctx, {
-        split = "<C-s>", vsplit = "<C-v>", delete = {},
+        split = keymaps.split, vsplit = keymaps.vsplit, delete = {},
+        accept = keymaps.accept, toggle = keymaps.toggle, toggle_all = keymaps.toggle_all,
         next = keymaps.next, previous = keymaps.previous,
       }, cache and #cache or 0, math.max(1, width - 2))
     end,
@@ -153,12 +162,27 @@ return function(opts)
       vim.wo[sess._display.win].signcolumn = "yes:1"
       vim.wo[sess._display.win].winhighlight = vim.wo[sess._display.win].winhighlight
         .. ",SignColumn:" .. opts.hl.normal
-      for key, command in pairs({ ["<C-s>"] = "split", ["<C-v>"] = "vsplit" }) do
-        keyset("i", key, function()
+      local function bind(keys, callback)
+        for _, key in ipairs(type(keys) == "string" and { keys } or keys) do
+          keyset("i", key, callback)
+        end
+      end
+      -- Replace the SelectSession defaults so {} really disables an action.
+      for _, key in ipairs({ "<CR>", "<C-y>", "<C-x>", "<C-a>", "<Esc>", "<C-c>" }) do
+        pcall(vim.keymap.del, "i", key, { buffer = sess._entry.buf })
+      end
+      bind(keymaps.next, function() sess:move(1) end)
+      bind(keymaps.previous, function() sess:move(-1) end)
+      for action, command in pairs({ split = "split", vsplit = "vsplit" }) do
+        bind(keymaps[action], function()
           local item = sess:get_selected()
           if item then sess:close(function() open(item, command) end) end
         end)
       end
+      bind(keymaps.accept, function() sess:accept() end)
+      bind(keymaps.toggle, function() sess:toggle_selection() end)
+      bind(keymaps.toggle_all, function() sess:toggle_selection_all() end)
+      bind(keymaps.close, function() sess:cancel() end)
       sess:render()
     end,
     on_accept = function(selection)

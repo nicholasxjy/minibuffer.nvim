@@ -155,13 +155,15 @@ You can also pass just a query: `require("minibuffer.builtin.live-grep")("TODO")
 `minibuffer.builtin.files` runs independently of Snacks, fff and fzf. It combines
 listed file buffers, existing recent files and `rg --files` results, removes
 duplicates by absolute path, and ranks them with the shared Snacks-style matcher.
-Recent/buffer files outside `cwd` are included, as in Snacks smart; `cwd_bonus`
-boosts files inside the search directory. Files are scanned once per invocation,
+`filter.cwd = true` (default) restricts every source to `cwd`, including buffers
+and recent files. Set it to `false` to include outside files as in Snacks smart;
+`cwd_bonus` then boosts files inside the search directory. Files are scanned once per invocation,
 including when the query changes. A new invocation refreshes files and Git status.
 
 ```lua
 require("minibuffer.builtin.files")({
   cwd = vim.fn.getcwd(),
+  filter = { cwd = true },
   query = "",
   matcher = {
     filename_bonus = true,
@@ -177,6 +179,12 @@ require("minibuffer.builtin.files")({
   keymaps = {
     next = { "<C-j>", "<Down>" },
     previous = { "<C-k>", "<Up>" },
+    split = { "<C-s>", "<C-w>s" },
+    vsplit = { "<C-v>", "<C-w>v" },
+    accept = { "<CR>", "<C-y>" },
+    toggle = { "<C-x>" },
+    toggle_all = { "<C-a>" },
+    close = { "<Esc>", "<C-c>" },
   },
   -- hl = { normal = "NormalFloat", cursor = "CursorLine", matched = "IncSearch" },
 })
@@ -190,10 +198,14 @@ history boundary-scoring scheme; it is not another timestamp-based recency score
 Empty queries also rank by bonuses. All four switches are independent.
 
 Layout is input → wrapped hints → results, without blank separators. Hints use
-the buffers picker's `FzfLuaHeaderBind` / `FzfLuaHeaderText` groups. File rows follow
-[fff's file renderer](https://github.com/dmtrKovalenko/fff/blob/main/lua/fff/picker_ui/file_renderer.lua):
-icon, filename, dim directory (or full path with `filename_first = false`), with
-middle-number directory shortening in narrow windows. Git uses fff's `┃`, `┆`,
+the buffers picker's `FzfLuaHeaderBind` / `FzfLuaHeaderText` groups. Filename-first
+rows use the fzf-lua integration's format: icon, padded filename, `│`, dim directory.
+The separator column is aligned across the complete candidate list (including
+Unicode/icon display widths), so filtering does not move the directory column.
+`filename_first = false` displays the full path instead. Colors and Git decorations
+retain the fff style, with middle-number directory shortening in narrow windows.
+Every keymap accepts a string, multiple strings, or `{}` to disable the action;
+action hints reflect these bindings. Git uses fff's `┃`, `┆`,
 `▁` signs and `FFFGit*` / `FFFGitSign*` groups; multi-selection uses `▊` with
 `FFFSelected` / `FFFSelectedActive`. Existing theme definitions are preserved.
 `hl` accepts fff-style names such as `normal`, `prompt`, `cursor`, `matched`,

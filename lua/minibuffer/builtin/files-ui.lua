@@ -91,6 +91,15 @@ function M.icon(item)
   if ok then return icons.get("file", item.path) end
 end
 
+function M.prepare(items)
+  local width = 0
+  for _, item in ipairs(items) do
+    item.name_width = vim.fn.strdisplaywidth((item.icon and item.icon .. " " or "") .. item.name)
+    width = math.max(width, item.name_width)
+  end
+  for _, item in ipairs(items) do item.name_padding = width - item.name_width end
+end
+
 function M.format(item, ctx, opts, current_file)
   local current = item.path == current_file
   local chunks = {}
@@ -109,14 +118,18 @@ function M.format(item, ctx, opts, current_file)
   end
   local dirname = item.directory ~= "" and item.directory:gsub("/$", "") .. "/" or ""
   local width = math.max(0, vim.o.columns - 4 - (item.icon and vim.fn.strdisplaywidth(item.icon) + 1 or 0))
-  local directory = M.shorten(item.directory, width - vim.fn.strdisplaywidth(item.name) - 1)
+  local directory = M.shorten(item.directory, width - vim.fn.strdisplaywidth(item.name)
+    - (opts.filename_first ~= false and item.name_padding + 3 or 1))
   if opts.filename_first == false and directory ~= "" then
     append(directory:gsub("/$", "") .. "/", 0, opts.hl.directory_path, directory == item.directory)
   end
   append(item.name, vim.fn.strchars(dirname), name_hl)
-  if opts.filename_first ~= false and directory ~= "" then
-    chunks[#chunks + 1] = { text = " " }
-    append(directory, 0, opts.hl.directory_path, directory == item.directory)
+  if opts.filename_first ~= false then
+    chunks[#chunks + 1] = { text = string.rep(" ", item.name_padding + 1) .. "│", hl = opts.hl.directory_path }
+    if directory ~= "" then
+      chunks[#chunks + 1] = { text = " " }
+      append(directory, 0, opts.hl.directory_path, directory == item.directory)
+    end
   end
   -- fff defaults to a literal match in the rendered row, with optional fuzzy ranges.
   if not opts.fuzzy_query_highlighting and ctx.input ~= "" then

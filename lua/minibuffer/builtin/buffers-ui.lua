@@ -130,9 +130,9 @@ function M.footer(ctx, keymaps, total)
     { keymaps.split, "split" },
     { keymaps.vsplit, "vsplit" },
     { keymaps.delete, "delete" },
-    { "<C-x>", "toggle" },
-    { "<C-a>", "toggle-all" },
-    { "<CR>", "accept" },
+    { keymaps.toggle or "<C-x>", "toggle" },
+    { keymaps.toggle_all or "<C-a>", "toggle-all" },
+    { keymaps.accept or "<CR>", "accept" },
     { keymaps.next, "next" },
     { keymaps.previous, "prev" },
   }
