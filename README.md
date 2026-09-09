@@ -146,6 +146,28 @@ require("minibuffer.builtin.live-grep")({
 
 ## Custom Pickers
 
+Builtin `diagnostics` is standalone: neither fzf nor fzf-lua is required.
+Its top input, right-aligned counts, action hints and result rows use fzf-style
+highlights. Rows show the configured diagnostic sign, source, path, line/column,
+message and code. Messages are flattened to one row; fuzzy matches are highlighted.
+`diag_source = false` and `diag_code = false` hide those fields. Navigation accepts
+`keymaps.next` / `keymaps.previous` strings or lists. Split/vsplit and multi-select
+quickfix actions are supported.
+
+```lua
+require("minibuffer.builtin.diagnostics")({
+  scope = "workspace", -- or "buffer"
+  sort = true, -- ERROR, WARN, INFO, HINT; "reverse" / 2 reverses; false keeps provider order
+  severity_limit = "WARN", -- ERROR and WARN
+  -- severity_only = "ERROR", -- exact level; cannot combine with limit/bound
+  -- severity_bound = "WARN", -- WARN, INFO and HINT
+})
+```
+
+Severity options accept names (case-insensitive) or `vim.diagnostic.severity`
+numbers. `severity_bound` and `severity_limit` can define an inclusive range.
+By default all levels are shown, sorted from ERROR to HINT.
+
 ```lua
 vim.keymap.set("n", "<leader>;", function()
   require("minibuffer.builtin.history")({ type = "cmd" })
