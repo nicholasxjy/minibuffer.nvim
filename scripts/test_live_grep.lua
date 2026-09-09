@@ -112,7 +112,7 @@ for i = 1, #many do
   assert(table.concat(body):find(">", 1, true), "current item remains visible")
   for _, line in ipairs(body) do
     if line:find("│", 1, true) then
-      assert(line:find("│ text", 1, true), "content indentation is removed")
+      assert(line:find("│     text", 1, true), "content indentation is preserved")
     end
   end
 end

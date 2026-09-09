@@ -32,9 +32,11 @@ function M.group(item, previous, filename_first)
       icon, icon_hl = icons.get("file", item.file)
     end
   end
-  if icon then
-    chunks[#chunks + 1] = { text = icon .. " ", hl = icon_hl }
-  end
+  icon = icon or ""
+  chunks[#chunks + 1] = {
+    text = icon .. string.rep(" ", math.max(0, 2 - vim.fn.strdisplaywidth(icon)) + 1),
+    hl = icon_hl,
+  }
   local directory, filename = item.file:match("^(.*[/])([^/]+)$")
   if filename_first == false then
     chunks[#chunks + 1] = { text = directory or "", hl = "FzfLuaDirPart" }
@@ -56,14 +58,14 @@ function M.format(item, ctx, index)
   chunks[#chunks + 1] = { text = ":" }
   chunks[#chunks + 1] = { text = tostring(item.col), hl = "FzfLuaPathColNr" }
   chunks[#chunks + 1] = { text = string.rep(" ", item.location_width - #tostring(item.line) - #tostring(item.col) - 1) .. " │ " }
-  local offset = #(item.text:match("^%s*") or "")
+  local offset = 0
   for _, match in ipairs(item.matches) do
     chunks[#chunks + 1] = { text = item.text:sub(offset + 1, match.start) }
     chunks[#chunks + 1] = {
-      text = item.text:sub(math.max(offset, match.start) + 1, match["end"]),
+      text = item.text:sub(match.start + 1, match["end"]),
       hl = "MinibufferGrepMatch",
     }
-    offset = math.max(offset, match["end"])
+    offset = match["end"]
   end
   chunks[#chunks + 1] = { text = item.text:sub(offset + 1) }
   return chunks
