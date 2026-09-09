@@ -86,7 +86,7 @@ SelectSession = SelectSession
 ---@field footer_pos "left"|"center"|"right"|nil
 ---Place the input above or below the results.
 ---@field prompt_position "top"|"bottom"|nil
----Wrapped hint lines between a top input and the results, separated by blank lines.
+---Wrapped hint lines between a top input and the results.
 ---@field header_fn minibuffer.core.SelectHeaderFn|nil
 ---The max height the minibuffer can grow to
 ---@field max_height integer|nil
@@ -316,10 +316,8 @@ function SelectSession:render()
   local ctx = self:get_ctx()
   local lines_data = {}
   if self.prompt_position == "top" then
-    lines_data[1] = {}
     if self.header_fn then
       vim.list_extend(lines_data, self.header_fn(ctx, vim.o.columns))
-      lines_data[#lines_data + 1] = {}
     end
   end
   self._header_height = #lines_data

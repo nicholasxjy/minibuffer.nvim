@@ -64,7 +64,7 @@ sess:render()
 local body = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
 local row = sess._header_height
 local line = body[row + 1]
-assert(body[1] == "" and body[row] == "", "blank lines separate input, hints and list")
+assert(body[1] ~= "" and body[row] ~= "", "hints and list have no blank separators")
 assert(row > 3, "hints wrap across multiple lines")
 assert(vim.api.nvim_win_get_height(sess._entry.win) == 1)
 assert(

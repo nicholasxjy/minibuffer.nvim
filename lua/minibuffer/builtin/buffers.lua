@@ -13,17 +13,18 @@ local function update_preview_win(win, buf)
 end
 
 local function get_file_icon(name)
-  local ok, icons = pcall(require, "mini.icons")
-  if ok and type(icons.get) == "function" then
-    local icon, hl = icons.get("file", name)
+  -- Match fzf-lua: use nvim-web-devicons before mini.icons when both exist.
+  local ok, icons = pcall(require, "nvim-web-devicons")
+  if ok and type(icons.get_icon) == "function" then
+    local icon, hl = icons.get_icon(name, nil, { default = true })
     if type(icon) == "string" and icon ~= "" then
       return icon, hl or "Normal"
     end
   end
 
-  ok, icons = pcall(require, "nvim-web-devicons")
-  if ok and type(icons.get_icon) == "function" then
-    local icon, hl = icons.get_icon(name, nil, { default = true })
+  ok, icons = pcall(require, "mini.icons")
+  if ok and type(icons.get) == "function" then
+    local icon, hl = icons.get("file", name)
     if type(icon) == "string" and icon ~= "" then
       return icon, hl or "Normal"
     end

@@ -174,7 +174,7 @@ end, { desc = "Find in quickfix" })
 ```
 
 The buffers picker displays the input, wrapping action hints, and results from
-top to bottom, with a blank line between sections. Hints wrap to the window
+top to bottom without blank lines between sections. Hints wrap to the window
 width and keep complete actions together when possible. The list shows
 `[number]`, current/alternate, loaded, read-only, and modified flags, a file icon,
 and `filename:line` followed by an aligned directory column. Set
