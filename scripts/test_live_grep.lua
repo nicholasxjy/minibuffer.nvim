@@ -118,6 +118,23 @@ for i = 1, #many do
 end
 grep({ cwd = root, keymaps = { next = { "<C-j>", "<Down>" }, previous = { "<C-k>", "<Up>" } } })
 local configured = Select.new(picker)
+local config = require("minibuffer.config")
+local saved_ui = config.ui
+config.ui = { min_height = 3, max_height = 4 }
+sess:render()
+assert(vim.api.nvim_win_get_height(sess._display.win) - sess._header_height == 4)
+sess._items, sess._current_index = {}, 0
+sess.dynamic_height = true
+sess:render()
+assert(vim.api.nvim_win_get_height(sess._display.win) - sess._header_height == 3)
+assert(util.content_height(100, 2) == 2, "screen space overrides the minimum")
+local validate = require("minibuffer.config.validate").validate
+for _, ui_config in ipairs({ { min_height = 0 }, { min_height = 1.5 },
+  { min_height = 5, max_height = 4 }, { min_height = 1, max_height = "10" } }) do
+  config.ui = ui_config
+  assert(not validate(config), "invalid height configuration must be rejected")
+end
+config.ui = saved_ui
 assert(vim.deep_equal(configured.keymaps.next, { "<C-j>", "<Down>" }))
 assert(vim.deep_equal(configured.keymaps.previous, { "<C-k>", "<Up>" }))
 picker.on_accept({ { item = items[1] }, { item = items[1] } })

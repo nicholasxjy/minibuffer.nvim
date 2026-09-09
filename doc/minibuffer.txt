@@ -230,6 +230,12 @@ minibuffer.config.select.keymaps              *minibuffer.config.select.keymaps*
 
 minibuffer.Opts                                                *minibuffer.Opts*
 
+    ui = { min_height = 1, max_height = nil } controls global content height
+    for input/select, display and scratch sessions. Values are positive integers;
+    min_height must not exceed max_height. Input, hints and borders are additional.
+    Available screen space takes priority. Existing session maximum heights still
+    apply, but the global minimum can raise a smaller session height.
+
     Fields: ~
         {dynamic_window_resize?}  (boolean)                                     Shrink other windows when the minibuffer is expanded
         {cmd?}                    (minibuffer.cmd.Opts)                         Opts for cmdline

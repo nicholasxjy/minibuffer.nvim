@@ -220,6 +220,7 @@ function SelectSession:pre_start()
 
   -- Setup display buffer and window
   local display_height = math.max(1, math.min(self.max_height, #self._items))
+  display_height = util.content_height(display_height)
   self._display.buf = vim.api.nvim_create_buf(false, false)
   if self._display.buf == 0 then
     error("Failed to create display minibuffer")
@@ -341,11 +342,8 @@ function SelectSession:render()
     display_height = math.max(prev_display_height, desired_height)
     display_height = math.min(display_height, self.max_height)
   end
-  if self.prompt_position == "top" then
-    -- Reserve room for the input, hints and at least one editor row.
-    display_height =
-      math.max(1, math.min(display_height, vim.o.lines - self._header_height - 2))
-  end
+  display_height = util.content_height(display_height,
+    vim.o.lines - self._header_height - (self.prompt_position == "top" and 2 or 3))
 
   -- Correct for scroll position
   if total <= display_height then

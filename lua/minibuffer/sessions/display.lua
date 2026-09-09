@@ -121,7 +121,7 @@ function DisplaySession:render()
   if not self.dynamic_height then
     new_height = math.max(vim.api.nvim_win_get_height(win), new_height)
   end
-  util.set_cmdheight(state.win_states, config.dynamic_window_resize, new_height + 1)
+  util.set_cmdheight(state.win_states, config.dynamic_window_resize, util.content_height(new_height) + 1)
 
   vim.api.nvim__redraw({ flush = true, cursor = true })
 end

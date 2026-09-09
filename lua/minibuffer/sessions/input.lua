@@ -161,6 +161,7 @@ function InputSession:pre_start()
 
   -- Setup display buffer and window
   local display_height = math.max(1, math.min(self.max_height, #self._items))
+  display_height = util.content_height(display_height)
   self._display.buf = vim.api.nvim_create_buf(false, true)
   if self._display.buf == 0 then
     error("Failed to create display minibuffer")
@@ -241,6 +242,8 @@ function InputSession:render()
     display_height = math.max(prev_display_height, desired_height)
     display_height = math.min(display_height, self.max_height)
   end
+
+  display_height = util.content_height(display_height)
 
   -- Correct for scroll position
   if total <= display_height then

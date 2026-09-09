@@ -38,6 +38,8 @@
 ---@field previous? string|string[]
 
 ---@class minibuffer.Opts
+---Global content height bounds in rows; input, hints and borders are additional.
+---@field ui? { min_height?: integer, max_height?: integer }
 ---Shrink other windows when the minibuffer is expanded
 ---@field dynamic_window_resize? boolean
 ---Opts for cmdline

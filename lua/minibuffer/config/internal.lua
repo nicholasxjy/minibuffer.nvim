@@ -5,12 +5,14 @@
 ---@field max_height integer
 
 ---@class minibuffer.Config
+---@field ui { min_height: integer, max_height?: integer }
 ---@field dynamic_window_resize boolean
 ---@field cmd minibuffer.cmd.Config
 ---@field select { keymaps: minibuffer.config.select.keymaps }
 
 ---@type minibuffer.Config
 local default_config = {
+  ui = { min_height = 1 },
   dynamic_window_resize = true,
   select = {
     keymaps = {

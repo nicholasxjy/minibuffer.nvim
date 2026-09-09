@@ -26,10 +26,21 @@ function M.validate(config)
       config.cmd,
       "table",
     },
+    ui = { config.ui, "table" },
   })
 
   if not ok then
     return false, err
+  end
+
+  for _, key in ipairs({ "min_height", "max_height" }) do
+    local value = config.ui[key]
+    if value ~= nil and (type(value) ~= "number" or value < 1 or value % 1 ~= 0) then
+      return false, "vim.g.minibuffer.ui." .. key .. ": expected positive integer"
+    end
+  end
+  if config.ui.max_height and config.ui.min_height > config.ui.max_height then
+    return false, "vim.g.minibuffer.ui.min_height must not exceed max_height"
   end
 
   ok, err = validate_path("vim.g.minibuffer.cmd", {

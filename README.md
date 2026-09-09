@@ -88,6 +88,10 @@ This plugin can be configured by using `vim.g.minibuffer` (preferably set before
 -- Default configuration
 vim.g.minibuffer = {
   dynamic_window_resize = true, -- Shrink other windows when the minibuffer is expanded
+  ui = {
+    min_height = 1, -- Minimum content height in rows
+    -- max_height = 20, -- Optional global content height cap
+  },
   select = {
     keymaps = {
       next = { "<C-n>", "<Down>", "<Tab>" },

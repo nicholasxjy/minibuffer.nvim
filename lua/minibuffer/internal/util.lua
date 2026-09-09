@@ -323,6 +323,16 @@ function M.set_win_height(win, height)
   end
 end
 
+-- Clamp content, not the input/header windows or the restored command line.
+function M.content_height(height, available)
+  local ui = require("minibuffer.config").ui
+  return math.max(1, math.min(
+    math.max(ui.min_height, height),
+    ui.max_height or math.huge,
+    math.max(1, available or vim.o.lines - 3)
+  ))
+end
+
 ---@param states table<integer, minibuffer.util.WindowState>
 ---@param resize_windows boolean
 ---@param height integer|nil If nil the reset to ext.cmdheight

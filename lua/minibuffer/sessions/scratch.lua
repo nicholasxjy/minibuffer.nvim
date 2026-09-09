@@ -124,6 +124,9 @@ function ScratchSession:render()
     additional_height = additional_height + 2
   end
 
+  cfg.height = util.content_height(cfg.height, vim.o.lines - additional_height - 1)
+  util.set_win_height(self._win, cfg.height)
+
   util.set_cmdheight(
     state.win_states,
     config.dynamic_window_resize,
