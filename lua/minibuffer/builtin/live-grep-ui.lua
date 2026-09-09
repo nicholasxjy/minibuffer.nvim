@@ -19,14 +19,9 @@ function M.setup()
   })
 end
 
-function M.format(item, ctx, index)
-  local chunks = {
-    { text = ctx.current_index == index and ">" or " ", hl = "FzfLuaFzfPointer" },
-    {
-      text = vim.tbl_contains(ctx.selected_indices, index) and ">" or " ",
-      hl = "FzfLuaFzfMarker",
-    },
-  }
+function M.group(item, previous, filename_first)
+  if previous and previous.file == item.file then return nil end
+  local chunks = { { text = "  " } }
   local ok, icons = pcall(require, "nvim-web-devicons")
   local icon, icon_hl
   if ok then
@@ -41,28 +36,40 @@ function M.format(item, ctx, index)
     chunks[#chunks + 1] = { text = icon .. " ", hl = icon_hl }
   end
   local directory, filename = item.file:match("^(.*[/])([^/]+)$")
-  chunks[#chunks + 1] = { text = directory or "", hl = "FzfLuaDirPart" }
+  if filename_first == false then
+    chunks[#chunks + 1] = { text = directory or "", hl = "FzfLuaDirPart" }
+  end
   chunks[#chunks + 1] = { text = filename or item.file, hl = "FzfLuaFilePart" }
-  chunks[#chunks + 1] = { text = ":" }
+  if filename_first ~= false and directory then
+    chunks[#chunks + 1] = { text = "  " .. directory:sub(1, -2), hl = "FzfLuaDirPart" }
+  end
+  return chunks
+end
+
+function M.format(item, ctx, index)
+  local chunks = {
+    { text = ctx.current_index == index and ">" or " ", hl = "FzfLuaFzfPointer" },
+    { text = vim.tbl_contains(ctx.selected_indices, index) and ">" or " ", hl = "FzfLuaFzfMarker" },
+    { text = " " },
+  }
   chunks[#chunks + 1] = { text = tostring(item.line), hl = "FzfLuaPathLineNr" }
   chunks[#chunks + 1] = { text = ":" }
   chunks[#chunks + 1] = { text = tostring(item.col), hl = "FzfLuaPathColNr" }
-  chunks[#chunks + 1] = { text = ":" }
-  local offset = 0
+  chunks[#chunks + 1] = { text = string.rep(" ", item.location_width - #tostring(item.line) - #tostring(item.col) - 1) .. " │ " }
+  local offset = #(item.text:match("^%s*") or "")
   for _, match in ipairs(item.matches) do
     chunks[#chunks + 1] = { text = item.text:sub(offset + 1, match.start) }
     chunks[#chunks + 1] = {
-      text = item.text:sub(match.start + 1, match["end"]),
+      text = item.text:sub(math.max(offset, match.start) + 1, match["end"]),
       hl = "MinibufferGrepMatch",
     }
-    offset = match["end"]
+    offset = math.max(offset, match["end"])
   end
   chunks[#chunks + 1] = { text = item.text:sub(offset + 1) }
   return chunks
 end
 
-function M.header(ctx, width, cwd)
-  local navigation = require("minibuffer.config").select.keymaps
+function M.header(ctx, width, cwd, navigation)
   -- Reuse the buffers picker's wrapping and key labels; info belongs to input.
   local lines = buffers_ui.hints(ctx, {
     split = "<C-s>",

@@ -26,7 +26,7 @@ local function fetch(query)
   assert(not failure, failure)
   return result
 end
-local items = fetch("test[12]")
+local items = picker.filter_fn({ items = fetch("test[12]") })
 assert(#items == 1 and #items[1].matches == 2)
 assert(items[1].col == 5 and items[1].line == 1)
 assert(#fetch("absent-pattern") == 0, "no matches must clear the list")
@@ -48,9 +48,10 @@ sess:render()
 assert(vim.api.nvim_win_get_position(sess._entry.win)[1] + 1
   == vim.api.nvim_win_get_position(sess._display.win)[1], "input above hints/results")
 local lines = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
-local row = sess._header_height
+local row = sess._header_height + 1
 assert(lines[1] ~= "" and lines[row] ~= "", "no blank separators")
-assert(lines[row + 1] == ">>界 src/中文 file.lua:1:5:前 test1 中 test2", lines[row + 1])
+assert(lines[row] == "  界 中文 file.lua  src", lines[row])
+assert(lines[row + 1] == ">> 1:5 │ 前 test1 中 test2", lines[row + 1])
 assert(not table.concat(lines, "\n"):find("delete", 1, true), "no nonexistent action")
 local groups = {}
 for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(sess._display.buf, state.ns,
@@ -66,7 +67,6 @@ for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(sess._display.buf, state.ns,
   end
 end
 assert(groups.MinibufferGrepMatch == "test1test2", "rg byte ranges highlight every match")
-assert(groups.FzfLuaDirPart == "src/" and groups.FzfLuaFilePart == "中文 file.lua")
 assert(groups.FzfLuaPathLineNr == "1" and groups.FzfLuaPathColNr == "5")
 assert(groups.FzfLuaFzfPointer == ">" and groups.FzfLuaFzfMarker == ">")
 assert(vim.wo[sess._entry.win].winhighlight:find("FzfLuaLivePrompt", 1, true))
@@ -88,6 +88,38 @@ for _, width in ipairs({ 24, 100 }) do
     assert(vim.fn.strdisplaywidth(text) <= width)
   end
 end
+local ui = require("minibuffer.builtin.live-grep-ui")
+local function flatten(chunks)
+  local text = ""
+  for _, chunk in ipairs(chunks) do text = text .. chunk.text end
+  return text
+end
+assert(flatten(ui.group(items[1], nil, false)) == "  界 src/中文 file.lua")
+local many = {}
+for i = 1, 30 do
+  many[i] = { file = i % 2 == 0 and "b.lua" or "a.lua", line = i * 10,
+    col = 1, text = "    text", matches = {} }
+end
+sess._items = picker.filter_fn({ items = many })
+sess.max_height = 5
+for i = 1, #many do
+  sess._current_index = i
+  sess:render()
+  assert(sess:get_selected() == sess._items[i], "navigation selects matches only")
+  local body = vim.api.nvim_buf_get_lines(sess._display.buf, sess._header_height, -1, false)
+  assert(body[1]:find(".lua", 1, true), "scrolling retains a file header")
+  assert(#body <= 5, "group titles count towards the viewport height")
+  assert(table.concat(body):find(">", 1, true), "current item remains visible")
+  for _, line in ipairs(body) do
+    if line:find("│", 1, true) then
+      assert(line:find("│ text", 1, true), "content indentation is removed")
+    end
+  end
+end
+grep({ cwd = root, keymaps = { next = { "<C-j>", "<Down>" }, previous = { "<C-k>", "<Up>" } } })
+local configured = Select.new(picker)
+assert(vim.deep_equal(configured.keymaps.next, { "<C-j>", "<Down>" }))
+assert(vim.deep_equal(configured.keymaps.previous, { "<C-k>", "<Up>" }))
 picker.on_accept({ { item = items[1] }, { item = items[1] } })
 assert(vim.api.nvim_buf_get_name(vim.fn.getqflist()[1].bufnr) == path,
   "quickfix filenames with spaces are not command-escaped")

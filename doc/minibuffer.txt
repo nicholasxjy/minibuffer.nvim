@@ -654,6 +654,7 @@ minibuffer.core.SelectSession : minibuffer.core.Session
         {filter_fn}          (minibuffer.core.SelectFilterFn)
         {footer_fn}          (minibuffer.core.SelectFooterFn|nil)
         {format_fn}          (minibuffer.core.FormatFn)
+        {group_fn}           (fun(item:any, previous:any):minibuffer.util.HighlightLine|nil)
         {on_start}           (minibuffer.core.SelectStartCallback|nil)
         {on_accept}          (minibuffer.core.SelectAcceptCallback|nil)
         {on_cancel}          (minibuffer.core.CancelCallback|nil)
@@ -690,6 +691,7 @@ minibuffer.core.SelectSessionOpts            *minibuffer.core.SelectSessionOpts*
         {filter_fn}       (minibuffer.core.SelectFilterFn)           The function used to filter the items based on the user input
         {format_fn}       (minibuffer.core.FormatFn)                 The function used to format a suggestion item to be displayed
         {footer_fn}       (minibuffer.core.SelectFooterFn|nil)       The function used to generate the footer text in the window
+        {group_fn}        ((fun(item:any, previous:any):minibuffer.util.HighlightLine|nil)|nil) Optional non-selectable heading before a new group or the first visible item.
         {on_start}        (minibuffer.core.SelectStartCallback|nil)  The callback called when the session is started
         {on_accept}       (minibuffer.core.SelectAcceptCallback)     The callback called when the user accepts their selection(s)
         {on_cancel}       (minibuffer.core.CancelCallback|nil)       The callback called when the session is canceled

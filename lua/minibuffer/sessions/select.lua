@@ -52,6 +52,7 @@ end
 ---@field filter_fn minibuffer.core.SelectFilterFn
 ---@field footer_fn minibuffer.core.SelectFooterFn|nil
 ---@field format_fn minibuffer.core.FormatFn
+---@field group_fn fun(item:any, previous:any):minibuffer.util.HighlightLine|nil
 ---@field on_start minibuffer.core.SelectStartCallback|nil
 ---@field on_accept minibuffer.core.SelectAcceptCallback|nil
 ---@field on_cancel minibuffer.core.CancelCallback|nil
@@ -100,6 +101,8 @@ SelectSession = SelectSession
 ---@field filter_fn minibuffer.core.SelectFilterFn
 ---The function used to format a suggestion item to be displayed
 ---@field format_fn minibuffer.core.FormatFn
+---Optional non-selectable heading before a new group or the first visible item.
+---@field group_fn (fun(item:any, previous:any):minibuffer.util.HighlightLine|nil)|nil
 ---The function used to generate the footer text in the window
 ---@field footer_fn minibuffer.core.SelectFooterFn|nil
 ---The callback called when the session is started
@@ -142,6 +145,7 @@ function SelectSession.new(opts)
     fetch_fn = opts.fetch_fn,
     filter_fn = opts.filter_fn,
     format_fn = opts.format_fn,
+    group_fn = opts.group_fn,
     footer_fn = opts.footer_fn or function(ctx)
       local prefix = ctx.multi and " C-x toggle, C-a toggle-all," or ""
       return {
@@ -322,8 +326,16 @@ function SelectSession:render()
   end
   self._header_height = #lines_data
   local total = #self._items
+  local result_rows = total
+  if self.group_fn then
+    for i, item in ipairs(self._items) do
+      if self.group_fn(item, self._items[i - 1]) then
+        result_rows = result_rows + 1
+      end
+    end
+  end
   local desired_height =
-    math.max(1, math.min(self.max_height, total + (self._loading and 1 or 0)))
+    math.max(1, math.min(self.max_height, result_rows + (self._loading and 1 or 0)))
   local display_height = desired_height
   if not self.dynamic_height then
     display_height = math.max(prev_display_height, desired_height)
@@ -383,7 +395,28 @@ function SelectSession:render()
   -- Build display output
   local start_idx = self._scroll_offset + 1
   local end_idx = math.min(total, start_idx + display_height - 1)
+  local item_rows = {}
+  if self.group_fn then
+    while true do
+      local used = 0
+      end_idx = start_idx - 1
+      for i = start_idx, total do
+        local group = self.group_fn(self._items[i], i > start_idx and self._items[i - 1] or nil)
+        local size = 1 + (group and display_height > 1 and 1 or 0)
+        if used + size > display_height then break end
+        used, end_idx = used + size, i
+      end
+      if self._current_index <= end_idx or start_idx >= total then break end
+      start_idx = start_idx + 1
+    end
+    self._scroll_offset = start_idx - 1
+  end
   for i = start_idx, end_idx do
+    if self.group_fn and display_height > 1 then
+      local group = self.group_fn(self._items[i], i > start_idx and self._items[i - 1] or nil)
+      if group then lines_data[#lines_data + 1] = group end
+    end
+    item_rows[i] = #lines_data
     lines_data[#lines_data + 1] = self.format_fn(self._items[i], ctx, i)
   end
   if self._loading then
@@ -398,7 +431,7 @@ function SelectSession:render()
       vim.api.nvim_buf_set_extmark,
       self._display.buf,
       state.ns,
-      self._header_height + self._current_index - start_idx,
+      item_rows[self._current_index],
       0,
       { line_hl_group = self.highlights.selection or "MinibufferSelection" }
     )
@@ -411,7 +444,7 @@ function SelectSession:render()
         vim.api.nvim_buf_set_extmark,
         self._display.buf,
         state.ns,
-        self._header_height + i - start_idx,
+        item_rows[i],
         0,
         {
           line_hl_group = self.highlights.multi_selection or "MinibufferMultiSelected",

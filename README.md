@@ -108,7 +108,8 @@ vim.g.minibuffer = {
 
 The builtin `live-grep` picker uses fzf-lua's reverse layout inside the bottom
 minibuffer: input and right-aligned result/selection counts, wrapped action
-hints, then results in search order. File icons, directory/file names, line and
+hints, then results grouped by file. Each file has one non-selectable heading;
+scrolling repeats the heading at the top of the visible results. File icons, directory/file names, line and
 column numbers, pointer, selection marker, and the current row use the
 corresponding `FzfLua*` highlight groups. Live input uses `FzfLuaLivePrompt`;
 regex matches use ripgrep's bold ANSI red (`MinibufferGrepMatch`). Existing
@@ -121,6 +122,21 @@ obtain exact match positions. `<C-s>` / `<C-v>` open a horizontal / vertical
 split, `<C-x>` / `<C-a>` select one / all results, and `<CR>` accepts. Multiple
 results open in quickfix. Navigation uses `select.keymaps.next` and
 `select.keymaps.previous`.
+
+`filename_first` defaults to `true` (filename followed by directory); set it to
+`false` for full paths. Result text is left-aligned with display indentation
+removed; original text and match locations are preserved for jumps and quickfix.
+Per-picker navigation overrides the global defaults and accepts a key or a list:
+
+```lua
+require("minibuffer.builtin.live-grep")({
+  filename_first = true,
+  keymaps = {
+    next = { "<C-j>", "<Down>" },
+    previous = { "<C-k>", "<Up>" },
+  },
+})
+```
 
 ## Custom Pickers
 

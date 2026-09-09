@@ -29,7 +29,23 @@ local function parse_rg_line(line)
 end
 
 local function filter_fn(ctx)
-  return ctx.items
+  local groups, order, width = {}, {}, 0
+  for _, item in ipairs(ctx.items) do
+    if not groups[item.file] then
+      groups[item.file] = {}
+      order[#order + 1] = item.file
+    end
+    table.insert(groups[item.file], item)
+    width = math.max(width, #tostring(item.line) + #tostring(item.col) + 1)
+  end
+  local items = {}
+  for _, file in ipairs(order) do
+    for _, item in ipairs(groups[file]) do
+      item.location_width = width
+      items[#items + 1] = item
+    end
+  end
+  return items
 end
 
 local function run_grep(opts, input, cb)
@@ -81,6 +97,8 @@ end
 ---@class minibuffer.builtin.LiveGrepOpts
 ---@field rg_opts string[]|nil
 ---@field cwd string|nil
+---@field filename_first? boolean Show filename before directory (default true).
+---@field keymaps? minibuffer.config.select.keymaps Navigation keys, each a string or list.
 
 ---@param opts minibuffer.builtin.LiveGrepOpts
 return function(opts)
@@ -105,11 +123,17 @@ return function(opts)
   }
   opts = vim.tbl_deep_extend("force", default_opts, opts or {})
   opts.cwd = vim.fs.normalize(opts.cwd or vim.fn.getcwd())
+  vim.validate("filename_first", opts.filename_first, "boolean", true)
+  local keymaps = vim.tbl_extend("force", require("minibuffer.config").select.keymaps, opts.keymaps or {})
   ui.setup()
   local session
 
   require("minibuffer").select({
     resumable = true,
+    keymaps = keymaps,
+    group_fn = function(item, previous)
+      return ui.group(item, previous, opts.filename_first)
+    end,
     prompt = "> ",
     prompt_position = "top",
     highlights = {
@@ -121,7 +145,7 @@ return function(opts)
       loading = "FzfLuaFzfSpinner",
     },
     header_fn = function(ctx, width)
-      return ui.header(ctx, width, opts.cwd)
+      return ui.header(ctx, width, opts.cwd, keymaps)
     end,
     on_change = function()
       if session then
