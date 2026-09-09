@@ -34,7 +34,7 @@ function M.group(item, previous, filename_first)
   end
   icon = icon or ""
   chunks[#chunks + 1] = {
-    text = icon .. string.rep(" ", math.max(0, 2 - vim.fn.strdisplaywidth(icon)) + 1),
+    text = icon .. " ",
     hl = icon_hl,
   }
   local directory, filename = item.file:match("^(.*[/])([^/]+)$")

@@ -179,8 +179,8 @@ results open in quickfix. Navigation uses `select.keymaps.next` and
 `select.keymaps.previous`.
 
 `filename_first` defaults to `true` (filename followed by directory); set it to
-`false` for full paths. File headings share a fixed-width icon column so filenames
-align across files. Result text starts in a shared column and preserves its original
+`false` for full paths. File headings use one space between the icon and filename.
+Result text starts in a shared column and preserves its original
 indentation, showing the code structure within each file. Match locations are
 preserved for jumps and quickfix.
 Per-picker navigation overrides the global defaults and accepts a key or a list:
