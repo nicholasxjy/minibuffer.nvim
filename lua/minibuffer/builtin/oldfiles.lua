@@ -52,17 +52,17 @@ local function filter_fn(ctx)
   return results
 end
 
----@class minibuffer.builtin.OldfilesOpts
+---@class minibuffer.builtin.OldfilesOpts: minibuffer.builtin.Opts
 ---@field cwd string|nil
 
 ---@param opts minibuffer.builtin.OldfilesOpts
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = vim.tbl_deep_extend("force", { cwd = nil }, opts or {})
+  opts = require("minibuffer.builtin.config").resolve(opts)
 
-  local oldfiles = gather_oldfiles(opts.cwd)
-  require("minibuffer").select({
+  local oldfiles = gather_oldfiles(opts.cwd or (opts.filter.cwd and vim.fn.getcwd() or nil))
+  require("minibuffer.builtin.config").select(opts, {
     resumable = true,
     prompt = "Oldfiles: ",
     multi = true,
@@ -71,7 +71,12 @@ return function(opts)
     fetch_fn = function(_, cb)
       cb(oldfiles)
     end,
-    format_fn = format_fn,
+    format_fn = function(item)
+      if opts.filename_first == false then
+        return { { text = item.path, hl = "Normal" } }
+      end
+      return format_fn(item)
+    end,
     filter_fn = filter_fn,
     on_accept = function(selection)
       if #selection == 1 then
@@ -95,7 +100,7 @@ return function(opts)
       vim.cmd("copen")
     end,
     on_start = function(sess, keyset)
-      keyset("i", "<C-s>", function()
+      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.split, function()
         local selected = sess:get_selected()
         if selected then
           if selected then
@@ -105,7 +110,7 @@ return function(opts)
           end
         end
       end)
-      keyset("i", "<C-v>", function()
+      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.vsplit, function()
         local selected = sess:get_selected()
         if selected then
           if selected then
@@ -117,13 +122,8 @@ return function(opts)
       end)
     end,
     footer_fn = function(ctx)
-      return {
-        { #ctx.items .. " items", "Normal" },
-        {
-          " C-x toggle, C-a toggle-all, C-s split, C-v vsplit, C-d delete, C-y accept, C-n next, C-p prev",
-          "Comment",
-        },
-      }
+      return require("minibuffer.builtin.buffers-ui").footer(ctx,
+        vim.tbl_extend("force", opts.keymaps, { delete = {} }), #oldfiles)
     end,
   })
 end

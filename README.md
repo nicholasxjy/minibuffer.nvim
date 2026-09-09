@@ -110,6 +110,57 @@ vim.g.minibuffer = {
 
 # Builtin
 
+Shared builtin options live in `vim.g.minibuffer.builtin` (set before loading
+the plugin). Each invocation can override them; nested maps merge by field,
+while key lists replace the inherited list and `{}` disables an action.
+`select.keymaps.next` and `previous` remain the fallback for navigation.
+
+```lua
+vim.g.minibuffer = {
+  builtin = {
+    filename_first = true,
+    filter = { cwd = true },
+    keymaps = {
+      next = { "<C-n>", "<Down>" },
+      previous = { "<C-p>", "<Up>" },
+      split = "<C-s>", vsplit = "<C-v>", delete = "<C-d>",
+      accept = { "<CR>", "<C-y>" }, close = { "<Esc>", "<C-c>" },
+      toggle = "<C-x>", toggle_all = "<C-a>",
+    },
+    highlights = {
+      normal = "NormalFloat", query = "NormalFloat", prompt = "Question",
+      selection = "CursorLine", multi_selection = "Visual",
+      directory_path = "Comment", matched = "IncSearch",
+    },
+    -- max_height = 15,
+    -- dynamic_height = false,
+    -- prompt_position = "top",
+  },
+}
+
+require("minibuffer.builtin.files")({
+  filename_first = false,
+  filter = { cwd = false },
+  keymaps = { split = {} },
+})
+```
+
+Only applicable options affect each picker: `delete` is a buffers action;
+`filename_first` controls files, buffers, oldfiles and live-grep/diagnostics paths.
+`filter.cwd` restricts files, buffers, oldfiles and diagnostics candidates;
+files default to `true`, the others remain unrestricted unless configured.
+An explicit `oldfiles.cwd` continues to restrict its directory.
+Grep and Git files already search within their `cwd`.
+Session highlights apply to every builtin selector, including `ui_select`.
+Row highlights also accept `file`, `pointer`, `marker`, `line_number`,
+`column_number`, `info`, `header_bind` and `header_text` in pickers using those
+elements; `loading` controls the spinner. `hl` retains the files picker's
+fff-style row options and can also be set globally. Within the same layer,
+`hl` takes precedence over equivalent `highlights` fields for files rows.
+Omitted highlight and layout fields retain each picker's existing defaults.
+These builtin defaults do not change custom `minibuffer.select()` calls or
+third-party integrations.
+
 The builtin `live-grep` picker uses fzf-lua's reverse layout inside the bottom
 minibuffer: input and right-aligned result/selection counts, wrapped action
 hints, then results grouped by file. Each file has one non-selectable heading;

@@ -44,17 +44,17 @@ local function filter_fn(ctx)
   return results
 end
 
----@class minibuffer.builtin.HistoryOpts
+---@class minibuffer.builtin.HistoryOpts: minibuffer.builtin.Opts
 ---@field type? "cmd"|"search"
 
 ---@param opts? minibuffer.builtin.HistoryOpts
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = vim.tbl_deep_extend("force", { type = nil }, opts or {})
+  opts = require("minibuffer.builtin.config").resolve(opts)
   local items = gather_history(opts.type)
 
-  require("minibuffer").select({
+  require("minibuffer.builtin.config").select(opts, {
     resumable = true,
     prompt = opts.type == "search" and "Search History: " or "Command History: ",
     multi = false,

@@ -31,7 +31,8 @@ local function format(item, ctx, index)
   return chunks
 end
 
----@class minibuffer.builtin.DiagnosticsOpts
+---@class minibuffer.builtin.DiagnosticsOpts: minibuffer.builtin.Opts
+---@field cwd? string
 ---@field scope? "buffer"|"workspace"
 ---@field sort? boolean|1|2|"severity"|"reverse" False keeps provider order; default true sorts ERROR first.
 ---@field severity_only? integer|string Exact severity.
@@ -44,7 +45,7 @@ end
 ---@param opts? minibuffer.builtin.DiagnosticsOpts
 return function(opts)
   require("minibuffer.internal.guard").check()
-  opts = opts or {}
+  opts = require("minibuffer.builtin.config").resolve(opts)
   vim.validate("filename_first", opts.filename_first, "boolean", true)
   local scope = opts.scope or "workspace"
   assert(scope == "buffer" or scope == "workspace", "scope must be buffer or workspace")
@@ -57,6 +58,13 @@ return function(opts)
   assert(not limit or not bound or bound <= limit, "severity_bound must not exceed severity_limit")
   local filter = only or { min = limit or 4, max = bound or 1 }
   local items = vim.diagnostic.get(scope == "buffer" and 0 or nil, { severity = filter })
+  if opts.filter.cwd then
+    local cwd = vim.fn.fnamemodify(opts.cwd or vim.fn.getcwd(), ":p")
+    items = vim.tbl_filter(function(item)
+      local path = vim.api.nvim_buf_get_name(item.bufnr)
+      return path ~= "" and vim.fs.relpath(cwd, path) ~= nil
+    end, items)
+  end
   if opts.sort ~= false then
     local reverse = opts.sort == 2 or opts.sort == "reverse"
     table.sort(items, function(a, b)
@@ -101,7 +109,7 @@ return function(opts)
     item.search_text = table.concat(text)
   end
   ui.setup()
-  local keymaps = vim.tbl_extend("force", require("minibuffer.config").select.keymaps, opts.keymaps or {})
+  local keymaps = opts.keymaps
   local session
   local function open(item, command)
     if command then vim.cmd(command) end
@@ -109,7 +117,7 @@ return function(opts)
     vim.api.nvim_win_set_cursor(0, { item.lnum + 1, item.col })
     vim.cmd("normal! zvzz")
   end
-  return require("minibuffer").select({
+  return require("minibuffer.builtin.config").select(opts, {
     resumable = true, prompt = "> ", prompt_position = "top", multi = true,
     dynamic_height = false, max_height = 15, keymaps = keymaps,
     highlights = {
@@ -141,8 +149,8 @@ return function(opts)
     on_start = function(sess, keyset)
       session = sess
       ui.info(sess)
-      for key, command in pairs({ ["<C-s>"] = "split", ["<C-v>"] = "vsplit" }) do
-        keyset("i", key, function()
+      for _, command in ipairs({ "split", "vsplit" }) do
+        require("minibuffer.builtin.config").bind(keyset, keymaps[command], function()
           local item = sess:get_selected()
           if item then sess:close(function() open(item, command) end) end
         end)

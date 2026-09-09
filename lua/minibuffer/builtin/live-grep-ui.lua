@@ -74,8 +74,11 @@ end
 function M.header(ctx, width, cwd, navigation)
   -- Reuse the buffers picker's wrapping and key labels; info belongs to input.
   local lines = buffers_ui.hints(ctx, {
-    split = "<C-s>",
-    vsplit = "<C-v>",
+    split = navigation.split or "<C-s>",
+    vsplit = navigation.vsplit or "<C-v>",
+    accept = navigation.accept,
+    toggle = navigation.toggle,
+    toggle_all = navigation.toggle_all,
     delete = {},
     next = navigation.next,
     previous = navigation.previous,
@@ -98,9 +101,9 @@ function M.info(sess)
   )
   local chunks = {}
   if sess._loading then
-    chunks[#chunks + 1] = { "⠋", "FzfLuaFzfSpinner" }
+    chunks[#chunks + 1] = { "⠋", sess.highlights.loading or "FzfLuaFzfSpinner" }
   end
-  chunks[#chunks + 1] = { text, "FzfLuaFzfInfo" }
+  chunks[#chunks + 1] = { text, sess.highlights.info or "FzfLuaFzfInfo" }
   -- Hide inline info when the query needs the entire input row.
   if
     vim.fn.strdisplaywidth(sess.prompt .. sess._input .. text) + 2

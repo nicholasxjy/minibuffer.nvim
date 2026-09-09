@@ -1,6 +1,6 @@
 local ui = require("minibuffer.builtin.files-ui")
 
----@class minibuffer.builtin.FilesOpts
+---@class minibuffer.builtin.FilesOpts: minibuffer.builtin.Opts
 ---@field filter? {cwd?: boolean} Restrict all sources to cwd (default true).
 ---@field cwd? string
 ---@field query? string
@@ -19,16 +19,16 @@ return function(opts)
   assert(vim.fn.executable("rg") == 1, "rg is required for the files picker")
   local cursor_hl = next(vim.api.nvim_get_hl(0, { name = "CursorLine", link = false }))
     and "CursorLine" or "Visual"
-  opts = vim.tbl_deep_extend("force", {
+  opts = require("minibuffer.builtin.config").resolve(opts, {
     filter = { cwd = true },
-    filename_first = true, git = { status_text_color = false }, show_git_status = true,
+    git = { status_text_color = false }, show_git_status = true,
     current_file_label = "(current)", fuzzy_query_highlighting = false,
     matcher = { filename_bonus = true, cwd_bonus = true, frecency = true, history_bonus = false },
     hl = { normal = "NormalFloat", prompt = "Question", cursor = cursor_hl,
       matched = "IncSearch", directory_path = "Comment", selected = "FFFSelected",
       selected_active = "FFFSelectedActive" },
     rg_opts = { "rg", "--files", "--hidden", "--color", "never", "-g", "!.git" },
-  }, opts or {})
+  })
   for _, name in ipairs({ "filename_first", "show_git_status", "fuzzy_query_highlighting" }) do
     vim.validate(name, opts[name], "boolean")
   end
@@ -40,10 +40,7 @@ return function(opts)
   opts.cwd = vim.fs.normalize(vim.fn.fnamemodify(opts.cwd or vim.fn.getcwd(), ":p"))
   local current_file = vim.fs.normalize(vim.api.nvim_buf_get_name(0))
   local ranker = require("minibuffer.fuzzy").new(vim.tbl_extend("force", opts.matcher, { cwd = opts.cwd }))
-  local keymaps = vim.tbl_extend("force", {
-    split = "<C-s>", vsplit = "<C-v>", accept = { "<CR>", "<C-y>" },
-    toggle = "<C-x>", toggle_all = "<C-a>", close = { "<Esc>", "<C-c>" },
-  }, require("minibuffer.config").select.keymaps, opts.keymaps or {})
+  local keymaps = opts.keymaps
   local buffers, recent = {}, vim.deepcopy(vim.v.oldfiles)
   for _, info in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
     if info.name ~= "" and vim.bo[info.bufnr].buftype == "" then buffers[#buffers + 1] = info end
@@ -126,7 +123,7 @@ return function(opts)
     vim.cmd(command .. " " .. vim.fn.fnameescape(item.path))
   end
   local session
-  return require("minibuffer").select({
+  return require("minibuffer.builtin.config").select(opts, {
     query = opts.query, resumable = true, prompt = "Files> ", prompt_position = "top",
     multi = true, dynamic_height = false, max_height = 15, keymaps = keymaps,
     highlights = {
@@ -162,27 +159,12 @@ return function(opts)
       vim.wo[sess._display.win].signcolumn = "yes:1"
       vim.wo[sess._display.win].winhighlight = vim.wo[sess._display.win].winhighlight
         .. ",SignColumn:" .. opts.hl.normal
-      local function bind(keys, callback)
-        for _, key in ipairs(type(keys) == "string" and { keys } or keys) do
-          keyset("i", key, callback)
-        end
-      end
-      -- Replace the SelectSession defaults so {} really disables an action.
-      for _, key in ipairs({ "<CR>", "<C-y>", "<C-x>", "<C-a>", "<Esc>", "<C-c>" }) do
-        pcall(vim.keymap.del, "i", key, { buffer = sess._entry.buf })
-      end
-      bind(keymaps.next, function() sess:move(1) end)
-      bind(keymaps.previous, function() sess:move(-1) end)
       for action, command in pairs({ split = "split", vsplit = "vsplit" }) do
-        bind(keymaps[action], function()
+        require("minibuffer.builtin.config").bind(keyset, keymaps[action], function()
           local item = sess:get_selected()
           if item then sess:close(function() open(item, command) end) end
         end)
       end
-      bind(keymaps.accept, function() sess:accept() end)
-      bind(keymaps.toggle, function() sess:toggle_selection() end)
-      bind(keymaps.toggle_all, function() sess:toggle_selection_all() end)
-      bind(keymaps.close, function() sess:cancel() end)
       sess:render()
     end,
     on_accept = function(selection)

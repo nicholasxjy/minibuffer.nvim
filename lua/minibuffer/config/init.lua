@@ -36,6 +36,20 @@
 ---@class minibuffer.config.select.keymaps
 ---@field next? string|string[]
 ---@field previous? string|string[]
+---@field accept? string|string[]
+---@field close? string|string[]
+---@field toggle? string|string[]
+---@field toggle_all? string|string[]
+
+---@class minibuffer.builtin.Opts
+---@field filename_first? boolean
+---@field filter? { cwd?: boolean } Restrict file-backed candidates to cwd.
+---@field keymaps? table<string, string|string[]> Empty lists disable actions.
+---@field highlights? table<string, string> Session highlight groups.
+---@field hl? table<string, string> Files row highlight groups (fff-style names).
+---@field dynamic_height? boolean
+---@field max_height? integer
+---@field prompt_position? "top"|"bottom"
 
 ---@class minibuffer.Opts
 ---Global content height bounds in rows; input, hints and borders are additional.
@@ -45,6 +59,7 @@
 ---Opts for cmdline
 ---@field cmd? minibuffer.cmd.Opts
 ---@field select? { keymaps: minibuffer.config.select.keymaps }
+---@field builtin? minibuffer.builtin.Opts Shared defaults for builtin pickers; call options take precedence.
 
 ---@type minibuffer.Opts|fun():minibuffer.Opts|nil
 vim.g.minibuffer = vim.g.minibuffer

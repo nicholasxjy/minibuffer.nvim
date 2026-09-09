@@ -4,12 +4,13 @@
 ---@param on_choice fun(item: T|nil, idx: integer|nil)
 return function(items, opts, on_choice)
   require("minibuffer.internal.guard").check()
+  opts = require("minibuffer.builtin.config").resolve(opts)
 
   local prompt = opts.prompt or "Select: "
   local format_item = opts.format_item or function(item)
     return item
   end
-  require("minibuffer").select({
+  require("minibuffer.builtin.config").select(opts, {
     prompt = prompt,
     fetch_fn = function(_, cb)
       cb(items)

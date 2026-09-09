@@ -11,7 +11,7 @@ local function filter_fn(ctx)
   return vim.fn.matchfuzzy(ctx.items, ctx.input)
 end
 
----@class minibuffer.builtin.GitFilesOpts
+---@class minibuffer.builtin.GitFilesOpts: minibuffer.builtin.Opts
 ---@field cwd? string
 ---@field show_untracked? boolean
 
@@ -19,8 +19,9 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = vim.tbl_deep_extend("force", { cwd = nil }, opts or {})
+  opts = require("minibuffer.builtin.config").resolve(opts)
   local cwd = vim.fn.fnamemodify(opts.cwd or vim.fn.getcwd(), ":p")
+  opts.cwd = cwd
   local show_untracked = opts.show_untracked == true
 
   local git = vim
@@ -39,7 +40,7 @@ return function(opts)
     return
   end
 
-  require("minibuffer").select({
+  require("minibuffer.builtin.config").select(opts, {
     resumable = true,
     prompt = "Git Files: ",
     multi = true,
@@ -94,7 +95,7 @@ return function(opts)
       vim.cmd("copen")
     end,
     on_start = function(sess, keyset)
-      keyset("i", "<C-s>", function()
+      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.split, function()
         local selected = sess:get_selected()
         if selected then
           if selected then
@@ -104,7 +105,7 @@ return function(opts)
           end
         end
       end)
-      keyset("i", "<C-v>", function()
+      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.vsplit, function()
         local selected = sess:get_selected()
         if selected then
           if selected then
@@ -118,13 +119,8 @@ return function(opts)
       end)
     end,
     footer_fn = function(ctx)
-      return {
-        { #ctx.items .. " items", "Normal" },
-        {
-          " C-x toggle, C-a toggle-all, C-s split, C-v vsplit, C-d delete, C-y accept, C-n next, C-p prev",
-          "Comment",
-        },
-      }
+      return require("minibuffer.builtin.buffers-ui").footer(ctx,
+        vim.tbl_extend("force", opts.keymaps, { delete = {} }), #ctx.items)
     end,
   })
 end

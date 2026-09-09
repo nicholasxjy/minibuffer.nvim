@@ -130,7 +130,10 @@ local configured = require("minibuffer.sessions.select").new(picker)
 configured:pre_start()
 configured._items = unrestricted
 local keys = {}
-picker.on_start(configured, function(_, key, cb) keys[key] = cb end)
+util.create_condition_keyset = function()
+  return function(_, key, cb) keys[key] = cb end
+end
+configured:post_start()
 assert(keys["<C-j>"] and keys["<Down>"] and keys["<C-k>"] and keys["<Up>"])
 assert(keys["<C-s>"] and keys["<C-w>s"] and not keys["<C-v>"])
 assert(keys["<C-l>"] and keys["<M-x>"] and not keys["<C-a>"])

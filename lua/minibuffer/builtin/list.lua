@@ -66,17 +66,17 @@ local function filter_fn(ctx)
   return results
 end
 
----@class minibuffer.builtin.ListOpts
+---@class minibuffer.builtin.ListOpts: minibuffer.builtin.Opts
 ---@field type? "quickfix"|"loclist"
 
 ---@param opts? minibuffer.builtin.ListOpts
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = vim.tbl_deep_extend("force", { type = "quickfix" }, opts or {})
+  opts = require("minibuffer.builtin.config").resolve(opts, { type = "quickfix" })
   local items = gather_items(opts.type)
 
-  require("minibuffer").select({
+  require("minibuffer.builtin.config").select(opts, {
     resumable = true,
     prompt = opts.type == "loclist" and "Location List: " or "Quickfix List: ",
     multi = false,

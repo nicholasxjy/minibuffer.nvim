@@ -108,11 +108,7 @@ local function get_replacement_buf(current)
   return vim.api.nvim_create_buf(false, true)
 end
 
-local function bind(keyset, keys, callback)
-  for _, key in ipairs(type(keys) == "string" and { keys } or keys or {}) do
-    keyset("i", key, callback)
-  end
-end
+local bind = require("minibuffer.builtin.config").bind
 
 ---@class minibuffer.builtin.BuffersKeymaps
 ---@field split? string|string[]
@@ -121,7 +117,8 @@ end
 ---@field next? string|string[]
 ---@field previous? string|string[]
 
----@class minibuffer.builtin.BuffersOpts
+---@class minibuffer.builtin.BuffersOpts: minibuffer.builtin.Opts
+---@field cwd? string
 ---@field keymaps? minibuffer.builtin.BuffersKeymaps
 ---@field filename_first? boolean Show the filename before its directory (default true).
 
@@ -129,23 +126,22 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = opts or {}
+  opts = require("minibuffer.builtin.config").resolve(opts)
   vim.validate("filename_first", opts.filename_first, "boolean", true)
   ui.setup()
-  local select_keymaps = require("minibuffer.config").select.keymaps
-  local keymaps = vim.tbl_deep_extend("force", {
-    split = "<C-s>",
-    vsplit = "<C-v>",
-    delete = "<C-d>",
-    next = select_keymaps.next,
-    previous = select_keymaps.previous,
-  }, opts and opts.keymaps or {})
+  local keymaps = opts.keymaps
   local active_win
   local buffers = gather_buffers()
+  if opts.filter.cwd then
+    local cwd = vim.fn.fnamemodify(opts.cwd or vim.fn.getcwd(), ":p")
+    buffers = vim.tbl_filter(function(item)
+      return item.path ~= "" and vim.fs.relpath(cwd, item.path) ~= nil
+    end, buffers)
+  end
   local minibuffer = require("minibuffer")
   local prev_buf = vim.api.nvim_get_current_buf()
 
-  minibuffer.select({
+  require("minibuffer.builtin.config").select(opts, {
     resumable = true,
     keymaps = { next = keymaps.next, previous = keymaps.previous },
     prompt = "Buffers> ",

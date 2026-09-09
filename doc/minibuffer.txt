@@ -226,6 +226,33 @@ minibuffer.config.select.keymaps              *minibuffer.config.select.keymaps*
     Fields: ~
         {next?}      (string|string[])
         {previous?}  (string|string[])
+        {accept?}    (string|string[])
+        {close?}     (string|string[])
+        {toggle?}    (string|string[])
+        {toggle_all?} (string|string[])
+
+
+minibuffer.builtin.Opts                              *minibuffer.builtin.Opts*
+
+    Shared defaults in vim.g.minibuffer.builtin. Call options take precedence.
+    Key lists replace inherited lists; {} disables an action. Navigation falls
+    back to select.keymaps. Unspecified highlights/layout retain picker defaults.
+
+    Fields: ~
+        {filename_first?}  (boolean) Filename before directory; default true.
+        {filter?}          ({cwd?:boolean}) Restrict files, buffers, oldfiles and
+                           diagnostics to cwd. Files default true, others false.
+        {keymaps?}         (table<string,string|string[]>) next, previous, accept,
+                           close, toggle, toggle_all, split, vsplit, delete.
+                           Actions apply only where supported (delete: buffers).
+        {highlights?}      (table<string,string>) normal, query, prompt, selection,
+                           multi_selection, loading; row groups: directory_path,
+                           matched, file, pointer, marker, line_number,
+                           column_number, info, header_bind, header_text.
+        {hl?}              (table<string,string>) Files fff-style row groups.
+        {dynamic_height?}  (boolean)
+        {max_height?}      (integer) Positive content height.
+        {prompt_position?} ("top"|"bottom")
 
 
 minibuffer.Opts                                                *minibuffer.Opts*
@@ -240,6 +267,7 @@ minibuffer.Opts                                                *minibuffer.Opts*
         {dynamic_window_resize?}  (boolean)                                     Shrink other windows when the minibuffer is expanded
         {cmd?}                    (minibuffer.cmd.Opts)                         Opts for cmdline
         {select?}                 ({keymaps:minibuffer.config.select.keymaps})
+        {builtin?}                (minibuffer.builtin.Opts) Shared builtin defaults.
 
 
 ==============================================================================

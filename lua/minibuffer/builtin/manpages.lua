@@ -103,10 +103,11 @@ local function filter_fn(ctx)
   return results
 end
 
-return function()
+return function(opts)
   require("minibuffer.internal.guard").check()
+  opts = require("minibuffer.builtin.config").resolve(opts)
 
-  require("minibuffer").select({
+  require("minibuffer.builtin.config").select(opts, {
     resumable = true,
     prompt = "Manpages: ",
     multi = false,

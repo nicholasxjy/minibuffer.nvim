@@ -104,7 +104,7 @@ local function run_grep(opts, input, cb)
   end)
 end
 
----@class minibuffer.builtin.LiveGrepOpts
+---@class minibuffer.builtin.LiveGrepOpts: minibuffer.builtin.Opts
 ---@field current_file_first? boolean Put the invoking buffer's file first (default false).
 ---@field query? string Initial search query.
 ---@field rg_opts string[]|nil
@@ -134,17 +134,17 @@ return function(opts)
     },
     cwd = nil,
   }
-  opts = vim.tbl_deep_extend("force", default_opts, opts or {})
+  opts = require("minibuffer.builtin.config").resolve(opts, default_opts)
   opts.cwd = vim.fs.normalize(opts.cwd or vim.fn.getcwd())
   vim.validate("current_file_first", opts.current_file_first, "boolean", true)
   local current_file = opts.current_file_first and vim.api.nvim_buf_get_name(0) or nil
   if current_file and current_file ~= "" then current_file = vim.fs.normalize(current_file) end
   vim.validate("filename_first", opts.filename_first, "boolean", true)
-  local keymaps = vim.tbl_extend("force", require("minibuffer.config").select.keymaps, opts.keymaps or {})
+  local keymaps = opts.keymaps
   ui.setup()
   local session
 
-  require("minibuffer").select({
+  require("minibuffer.builtin.config").select(opts, {
     query = opts.query,
     resumable = true,
     keymaps = keymaps,
@@ -212,7 +212,7 @@ return function(opts)
     on_start = function(sess, keyset)
       session = sess
       ui.info(sess)
-      keyset("i", "<C-s>", function()
+      require("minibuffer.builtin.config").bind(keyset, keymaps.split, function()
         local selected = sess:get_selected()
         if selected then
           sess:close(function()
@@ -227,7 +227,7 @@ return function(opts)
           end)
         end
       end)
-      keyset("i", "<C-v>", function()
+      require("minibuffer.builtin.config").bind(keyset, keymaps.vsplit, function()
         local selected = sess:get_selected()
         if selected then
           sess:close(function()

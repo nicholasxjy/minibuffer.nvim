@@ -125,7 +125,10 @@ function SelectSession.new(opts)
   opts = opts or {}
   vim.validate("query", opts.query, "string", true)
   assert(not opts.query or not opts.query:find("[\r\n]"), "query must be a single line")
-  local keymaps = vim.tbl_extend("force", config.select.keymaps, opts.keymaps or {})
+  local keymaps = vim.tbl_extend("force", {
+    accept = { "<CR>", "<C-y>" }, close = { "<Esc>", "<C-c>" },
+    toggle = "<C-x>", toggle_all = "<C-a>",
+  }, config.select.keymaps, opts.keymaps or {})
   for action, keys in pairs(keymaps) do
     vim.validate(action, keys, { "string", "table" })
     assert(type(keys) == "string" or vim.islist(keys), action .. " must be a list")
@@ -479,18 +482,14 @@ function SelectSession:post_start()
     return state.session == self
   end, { buf = self._entry.buf, nowait = true, silent = true, noremap = true })
 
-  keyset("i", "<Esc>", function()
-    self:cancel()
-  end)
-  keyset("i", "<C-c>", function()
-    self:cancel()
-  end)
-  keyset("i", "<CR>", function()
-    self:accept()
-  end)
-  keyset("i", "<C-y>", function()
-    self:accept()
-  end)
+  local function bind(action, callback)
+    local keys = self.keymaps[action]
+    for _, key in ipairs(type(keys) == "string" and { keys } or keys) do
+      keyset("i", key, callback)
+    end
+  end
+  bind("close", function() self:cancel() end)
+  bind("accept", function() self:accept() end)
   for action, delta in pairs({ next = 1, previous = -1 }) do
     local keys = self.keymaps[action]
     for _, key in ipairs(type(keys) == "string" and { keys } or keys) do
@@ -502,10 +501,10 @@ function SelectSession:post_start()
   keyset("i", "<C-w>", "<C-S-w>")
 
   if self.multi then
-    keyset("i", "<C-x>", function()
+    bind("toggle", function()
       self:toggle_selection()
     end)
-    keyset("i", "<C-a>", function()
+    bind("toggle_all", function()
       self:toggle_selection_all()
     end)
   end
