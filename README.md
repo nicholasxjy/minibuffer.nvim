@@ -157,6 +157,11 @@ quickfix actions are supported.
 ```lua
 require("minibuffer.builtin.diagnostics")({
   scope = "workspace", -- or "buffer"
+  filename_first = true, -- default; false displays the full path in its original order
+  keymaps = {
+    next = { "<C-j>", "<Down>" },
+    previous = { "<C-k>", "<Up>" },
+  },
   sort = true, -- ERROR, WARN, INFO, HINT; "reverse" / 2 reverses; false keeps provider order
   severity_limit = "WARN", -- ERROR and WARN
   -- severity_only = "ERROR", -- exact level; cannot combine with limit/bound
@@ -167,6 +172,8 @@ require("minibuffer.builtin.diagnostics")({
 Severity options accept names (case-insensitive) or `vim.diagnostic.severity`
 numbers. `severity_bound` and `severity_limit` can define an inclusive range.
 By default all levels are shown, sorted from ERROR to HINT.
+The current row is bold while retaining severity and fuzzy-match colors.
+With `filename_first = true`, the directory follows the filename and line/column.
 
 ```lua
 vim.keymap.set("n", "<leader>;", function()

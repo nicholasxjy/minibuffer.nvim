@@ -23,6 +23,11 @@ local function format(item, ctx, index)
       offset = offset + 1
     end
   end
+  if ctx.current_index == index then
+    for _, chunk in ipairs(chunks) do
+      chunk.hl = chunk.hl and { chunk.hl, "MinibufferBuffersBold" } or "MinibufferBuffersBold"
+    end
+  end
   return chunks
 end
 
@@ -35,10 +40,12 @@ end
 ---@field diag_source? boolean Show source (default true).
 ---@field diag_code? boolean Show diagnostic code (default true).
 ---@field keymaps? minibuffer.config.select.keymaps
+---@field filename_first? boolean Show filename before directory (default true).
 ---@param opts? minibuffer.builtin.DiagnosticsOpts
 return function(opts)
   require("minibuffer.internal.guard").check()
   opts = opts or {}
+  vim.validate("filename_first", opts.filename_first, "boolean", true)
   local scope = opts.scope or "workspace"
   assert(scope == "buffer" or scope == "workspace", "scope must be buffer or workspace")
   assert(opts.sort == nil or opts.sort == true or opts.sort == false or opts.sort == 1
@@ -68,6 +75,7 @@ return function(opts)
     local icon = type(signs) == "table" and signs.text and signs.text[item.severity]
       or names[item.severity]:sub(1, 1)
     local path = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(item.bufnr), ":.")
+    local directory, filename = path:match("^(.*[/])([^/]+)$")
     item.chunks = {
       { text = vim.trim(icon) .. " ", hl = hl },
     }
@@ -75,13 +83,16 @@ return function(opts)
       table.insert(item.chunks, { text = "[" .. item.source .. "] ", hl = hl })
     end
     vim.list_extend(item.chunks, {
-      { text = path, hl = hl },
+      { text = opts.filename_first == false and path or filename or path, hl = hl },
       { text = ":" },
       { text = tostring(item.lnum + 1), hl = "FzfLuaPathLineNr" },
       { text = ":" },
       { text = tostring(item.col + 1), hl = "FzfLuaPathColNr" },
-      { text = ": " .. vim.trim(item.message):gsub("[\r\n]+", " ") },
     })
+    if opts.filename_first ~= false and directory then
+      table.insert(item.chunks, { text = "  " .. directory:gsub("(.)/$", "%1"), hl = "FzfLuaDirPart" })
+    end
+    table.insert(item.chunks, { text = ": " .. vim.trim(item.message):gsub("[\r\n]+", " ") })
     if opts.diag_code ~= false and item.code ~= nil then
       table.insert(item.chunks, { text = " [" .. tostring(item.code) .. "]", hl = "Comment" })
     end
@@ -103,7 +114,7 @@ return function(opts)
     dynamic_height = false, max_height = 15, keymaps = keymaps,
     highlights = {
       normal = "FzfLuaFzfNormal", query = "FzfLuaFzfQuery", prompt = "FzfLuaFzfPrompt",
-      selection = "FzfLuaFzfCursorLine", multi_selection = "FzfLuaFzfNormal",
+      selection = "MinibufferBuffersSelection", multi_selection = "FzfLuaFzfNormal",
     },
     header_fn = function(ctx, width) return ui.header(ctx, width, vim.fn.getcwd(), keymaps) end,
     on_change = function() if session then ui.info(session) end end,
