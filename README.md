@@ -150,6 +150,59 @@ You can also pass just a query: `require("minibuffer.builtin.live-grep")("TODO")
 
 ## Custom Pickers
 
+### Builtin files: smart ranking and fff-style rows
+
+`minibuffer.builtin.files` runs independently of Snacks, fff and fzf. It combines
+listed file buffers, existing recent files and `rg --files` results, removes
+duplicates by absolute path, and ranks them with the shared Snacks-style matcher.
+Recent/buffer files outside `cwd` are included, as in Snacks smart; `cwd_bonus`
+boosts files inside the search directory. Files are scanned once per invocation,
+including when the query changes. A new invocation refreshes files and Git status.
+
+```lua
+require("minibuffer.builtin.files")({
+  cwd = vim.fn.getcwd(),
+  query = "",
+  matcher = {
+    filename_bonus = true,
+    cwd_bonus = true,
+    frecency = true,
+    history_bonus = false,
+  },
+  filename_first = true,
+  show_git_status = true,
+  git = { status_text_color = false }, -- fff default: color signs only
+  fuzzy_query_highlighting = false, -- fff default: highlight literal query
+  current_file_label = "(current)",
+  keymaps = {
+    next = { "<C-j>", "<Down>" },
+    previous = { "<C-k>", "<Up>" },
+  },
+  -- hl = { normal = "NormalFloat", cursor = "CursorLine", matched = "IncSearch" },
+})
+```
+
+Scoring follows [Snacks smart](https://github.com/folke/snacks.nvim/blob/main/lua/snacks/picker/config/sources.lua)
+and its matcher: filename matches receive the filename bonus, cwd matches add 10,
+and frecency adds `8 * (1 - 1 / (1 + score))`. Visits use a 30-day half-life and
+persist in `stdpath("data")/minibuffer/frecency.json`. `history_bonus` selects the
+history boundary-scoring scheme; it is not another timestamp-based recency score.
+Empty queries also rank by bonuses. All four switches are independent.
+
+Layout is input → wrapped hints → results, without blank separators. Hints use
+the buffers picker's `FzfLuaHeaderBind` / `FzfLuaHeaderText` groups. File rows follow
+[fff's file renderer](https://github.com/dmtrKovalenko/fff/blob/main/lua/fff/picker_ui/file_renderer.lua):
+icon, filename, dim directory (or full path with `filename_first = false`), with
+middle-number directory shortening in narrow windows. Git uses fff's `┃`, `┆`,
+`▁` signs and `FFFGit*` / `FFFGitSign*` groups; multi-selection uses `▊` with
+`FFFSelected` / `FFFSelectedActive`. Existing theme definitions are preserved.
+`hl` accepts fff-style names such as `normal`, `prompt`, `cursor`, `matched`,
+`directory_path`, `git_modified`, and `git_sign_modified_selected`.
+Git status is read for the repository containing `cwd`; outside-repository recent
+files have no Git decoration. Git is optional; without it, file search still works.
+
+### Other builtin pickers
+
 Builtin `diagnostics` is standalone: neither fzf nor fzf-lua is required.
 Its top input, right-aligned counts, action hints and result rows use fzf-style
 highlights. Rows show the configured diagnostic sign, source, path, line/column,
