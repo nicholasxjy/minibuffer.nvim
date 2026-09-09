@@ -136,6 +136,8 @@ Per-picker navigation overrides the global defaults and accepts a key or a list:
 
 ```lua
 require("minibuffer.builtin.live-grep")({
+  query = "TODO", -- optional initial query; searches immediately
+  current_file_first = false, -- true puts the invoking buffer's file group first
   filename_first = true,
   keymaps = {
     next = { "<C-j>", "<Down>" },
@@ -143,6 +145,8 @@ require("minibuffer.builtin.live-grep")({
   },
 })
 ```
+
+You can also pass just a query: `require("minibuffer.builtin.live-grep")("TODO")`.
 
 ## Custom Pickers
 

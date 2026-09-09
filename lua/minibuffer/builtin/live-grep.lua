@@ -28,7 +28,7 @@ local function parse_rg_line(line)
   }
 end
 
-local function filter_fn(ctx)
+local function filter_fn(ctx, current_file, cwd)
   local groups, order, width = {}, {}, 0
   for _, item in ipairs(ctx.items) do
     if not groups[item.file] then
@@ -37,6 +37,16 @@ local function filter_fn(ctx)
     end
     table.insert(groups[item.file], item)
     width = math.max(width, #tostring(item.line) + #tostring(item.col) + 1)
+  end
+  if current_file and current_file ~= "" then
+    for i, file in ipairs(order) do
+      local path = file:match("^/") or file:match("^%a:[/\\]")
+      path = vim.fn.fnamemodify(path and file or vim.fs.joinpath(cwd, file), ":p")
+      if vim.fs.normalize(path) == current_file then
+        table.insert(order, 1, table.remove(order, i))
+        break
+      end
+    end
   end
   local items = {}
   for _, file in ipairs(order) do
@@ -95,14 +105,17 @@ local function run_grep(opts, input, cb)
 end
 
 ---@class minibuffer.builtin.LiveGrepOpts
+---@field current_file_first? boolean Put the invoking buffer's file first (default false).
+---@field query? string Initial search query.
 ---@field rg_opts string[]|nil
 ---@field cwd string|nil
 ---@field filename_first? boolean Show filename before directory (default true).
 ---@field keymaps? minibuffer.config.select.keymaps Navigation keys, each a string or list.
 
----@param opts minibuffer.builtin.LiveGrepOpts
+---@param opts? minibuffer.builtin.LiveGrepOpts|string
 return function(opts)
   require("minibuffer.internal.guard").check()
+  if type(opts) == "string" then opts = { query = opts } end
 
   ---@type minibuffer.builtin.LiveGrepOpts
   local default_opts = {
@@ -123,12 +136,16 @@ return function(opts)
   }
   opts = vim.tbl_deep_extend("force", default_opts, opts or {})
   opts.cwd = vim.fs.normalize(opts.cwd or vim.fn.getcwd())
+  vim.validate("current_file_first", opts.current_file_first, "boolean", true)
+  local current_file = opts.current_file_first and vim.api.nvim_buf_get_name(0) or nil
+  if current_file and current_file ~= "" then current_file = vim.fs.normalize(current_file) end
   vim.validate("filename_first", opts.filename_first, "boolean", true)
   local keymaps = vim.tbl_extend("force", require("minibuffer.config").select.keymaps, opts.keymaps or {})
   ui.setup()
   local session
 
   require("minibuffer").select({
+    query = opts.query,
     resumable = true,
     keymaps = keymaps,
     group_fn = function(item, previous)
@@ -161,7 +178,9 @@ return function(opts)
       end)
     end,
     format_fn = ui.format,
-    filter_fn = filter_fn,
+    filter_fn = function(ctx)
+      return filter_fn(ctx, current_file, opts.cwd)
+    end,
     on_accept = function(selection)
       if #selection == 1 then
         local item = selection[1].item

@@ -16,7 +16,9 @@ local root = vim.fn.tempname()
 vim.fn.mkdir(root .. "/src", "p")
 local path = root .. "/src/中文 file.lua"
 vim.fn.writefile({ "前 test1 中 test2", "nothing", "--needle" }, path)
-grep({ cwd = root })
+grep("test[12]")
+assert(picker.query == "test[12]", "string shorthand forwards the query")
+grep({ cwd = root, query = "test[12]" })
 local function fetch(query)
   local result, failure
   picker.fetch_fn(query, function(items, err)
@@ -41,6 +43,12 @@ util.wipe_cmd_buffer = function() end
 util.set_cmdheight = function() end
 local sess = Select.new(picker)
 sess:pre_start()
+assert(sess._input == "test[12]")
+assert(vim.api.nvim_buf_get_lines(sess._entry.buf, 0, 1, false)[1] == "> test[12]",
+  "initial query is inserted literally into the prompt buffer")
+sess:refresh_results()
+assert(vim.wait(3000, function() return not sess._loading end))
+assert(#sess._items == 1, "initial query drives the first search")
 sess._items, sess._input, sess._selected_indices = items, "test[12]", { 1 }
 vim.api.nvim_buf_set_lines(sess._entry.buf, 0, -1, false, { "> test[12]" })
 picker.on_start(sess, function() end)
@@ -143,5 +151,23 @@ assert(vim.api.nvim_buf_get_name(vim.fn.getqflist()[1].bufnr) == path,
 vim.api.nvim_set_hl(0, "FzfLuaPathColNr", { fg = "#123456" })
 require("minibuffer.builtin.live-grep-ui").setup()
 assert(vim.api.nvim_get_hl(0, { name = "FzfLuaPathColNr" }).fg == 0x123456)
+local current = vim.api.nvim_create_buf(true, false)
+vim.api.nvim_buf_set_name(current, root .. "/current.lua")
+vim.api.nvim_set_current_buf(current)
+local candidates = {
+  { file = "other.lua", line = 1, col = 1 },
+  { file = "./current.lua", line = 2, col = 1 },
+  { file = "last.lua", line = 3, col = 1 },
+  { file = "./current.lua", line = 4, col = 1 },
+}
+grep({ cwd = root, current_file_first = true })
+vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))
+local ordered = picker.filter_fn({ items = candidates })
+assert(ordered[1] == candidates[2] and ordered[2] == candidates[4], "invoking file group first")
+assert(ordered[3] == candidates[1] and ordered[4] == candidates[3], "other groups retain their order")
+grep({ cwd = root, current_file_first = false })
+assert(picker.filter_fn({ items = candidates })[1] == candidates[1])
+grep({ cwd = root, current_file_first = true })
+assert(picker.filter_fn({ items = candidates })[1] == candidates[1], "unnamed buffer keeps default order")
 vim.fn.delete(root, "rf")
 print("live grep layout, highlights, regex matches, navigation paths and empty results passed")

@@ -682,6 +682,9 @@ minibuffer.core.SelectSession : minibuffer.core.Session
 
 minibuffer.core.SelectSessionOpts            *minibuffer.core.SelectSessionOpts*
 
+    query (string|nil): Initial single-line input, inserted literally before
+    the first fetch. Defaults to an empty string.
+
     Fields: ~
         {keymaps}         (minibuffer.config.select.keymaps|nil)     Navigation mappings; each action replaces the global default.
         {resumable}       (boolean|nil)                              Whether this specific session is reusable

@@ -75,6 +75,8 @@ SelectSession.__index = SelectSession
 SelectSession = SelectSession
 
 ---@class minibuffer.core.SelectSessionOpts
+---Initial input, inserted literally before the first fetch.
+---@field query? string
 ---Navigation mappings; each action replaces the global default.
 ---@field keymaps minibuffer.config.select.keymaps|nil
 ---Whether this specific session is reusable
@@ -121,6 +123,8 @@ SelectSession = SelectSession
 ---@return minibuffer.core.SelectSession
 function SelectSession.new(opts)
   opts = opts or {}
+  vim.validate("query", opts.query, "string", true)
+  assert(not opts.query or not opts.query:find("[\r\n]"), "query must be a single line")
   local keymaps = vim.tbl_extend("force", config.select.keymaps, opts.keymaps or {})
   for action, keys in pairs(keymaps) do
     vim.validate(action, keys, { "string", "table" })
@@ -171,7 +175,7 @@ function SelectSession.new(opts)
     _resumable = opts.resumable == true,
     _entry = { buf = nil, win = nil },
     _display = { buf = nil, win = nil },
-    _input = "",
+    _input = opts.query or "",
     _items = {},
     _current_index = 1,
     _selected_indices = {},
@@ -271,6 +275,9 @@ function SelectSession:pre_start()
   vim.bo[self._entry.buf].buftype = "prompt"
   vim.bo[self._entry.buf].complete = ""
   vim.fn.prompt_setprompt(self._entry.buf, self.prompt)
+  if self._input ~= "" then
+    vim.api.nvim_buf_set_lines(self._entry.buf, 0, -1, false, { self.prompt .. self._input })
+  end
   vim.fn.prompt_setcallback(self._entry.buf, function(_)
     self:accept()
   end)
@@ -509,11 +516,8 @@ function SelectSession:post_start()
   state.active_window = util.focus_win(self._entry.win)
 
   vim.api.nvim_win_call(self._entry.win, function()
-    vim.cmd("startinsert")
+    vim.cmd(self._input ~= "" and "startinsert!" or "startinsert")
   end)
-  if self._input ~= "" then
-    pcall(vim.api.nvim_feedkeys, self._input, "t", false)
-  end
 
   vim.schedule(function()
     vim.api.nvim_buf_attach(self._entry.buf, false, {
