@@ -106,6 +106,22 @@ vim.g.minibuffer = {
 
 # Builtin
 
+The builtin `live-grep` picker uses fzf-lua's reverse layout inside the bottom
+minibuffer: input and right-aligned result/selection counts, wrapped action
+hints, then results in search order. File icons, directory/file names, line and
+column numbers, pointer, selection marker, and the current row use the
+corresponding `FzfLua*` highlight groups. Live input uses `FzfLuaLivePrompt`;
+regex matches use ripgrep's bold ANSI red (`MinibufferGrepMatch`). Existing
+theme definitions are preserved; fzf-lua is not required.
+
+`require("minibuffer.builtin.live-grep")({ cwd = "/path/to/project" })` searches
+the given directory (default: the current directory). `rg_opts` accepts an argv
+list including the `rg` executable; the picker appends `--json -e <query>` to
+obtain exact match positions. `<C-s>` / `<C-v>` open a horizontal / vertical
+split, `<C-x>` / `<C-a>` select one / all results, and `<CR>` accepts. Multiple
+results open in quickfix. Navigation uses `select.keymaps.next` and
+`select.keymaps.previous`.
+
 ## Custom Pickers
 
 ```lua

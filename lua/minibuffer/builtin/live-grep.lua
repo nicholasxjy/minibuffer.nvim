@@ -4,34 +4,27 @@ if vim.fn.executable("rg") == 0 then
 end
 
 local util = require("minibuffer.internal.util")
+local ui = require("minibuffer.builtin.live-grep-ui")
 
 local debounce = util.make_debounced(100)
 local generation = 0
 local current_proc ---@type vim.SystemObj?
 
 local function parse_rg_line(line)
-  -- rg format:
-  -- file:line:column:text
-  local file, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
-
-  if not file then
+  local event = vim.json.decode(line)
+  if event.type ~= "match" then
     return nil
   end
-
+  local data = event.data
+  local function decode(value)
+    return value.text or vim.base64.decode(value.bytes)
+  end
   return {
-    file = file,
-    line = tonumber(lnum),
-    col = tonumber(col),
-    text = text,
-  }
-end
-
-local function format_fn(item)
-  local prefix = string.format("%s:%d:%d: ", item.file, item.line, item.col)
-
-  return {
-    { text = prefix, hl = "Comment" },
-    { text = item.text, hl = "Normal" },
+    file = decode(data.path),
+    line = data.line_number,
+    col = data.submatches[1] and data.submatches[1].start + 1 or 1,
+    text = decode(data.lines):gsub("\r?\n$", ""),
+    matches = data.submatches,
   }
 end
 
@@ -40,22 +33,21 @@ local function filter_fn(ctx)
 end
 
 local function run_grep(opts, input, cb)
+  generation = generation + 1
+  local current = generation
+  if current_proc then
+    current_proc:kill("sigterm")
+    current_proc = nil
+  end
   if input == "" then
     cb({})
     return
   end
 
-  generation = generation + 1
-  local current = generation
-
   local cmd = vim.list_extend({}, opts.rg_opts)
-
+  cmd[#cmd + 1] = "--json"
+  cmd[#cmd + 1] = "-e"
   cmd[#cmd + 1] = input
-
-  if current_proc then
-    current_proc:kill("sigterm")
-    current_proc = nil
-  end
 
   local system_opts = { text = true }
 
@@ -64,17 +56,14 @@ local function run_grep(opts, input, cb)
   end
 
   current_proc = vim.system(cmd, system_opts, function(res)
-    if current_proc then
-      current_proc = nil
-    end
-
     if current ~= generation then
       return
     end
+    current_proc = nil
 
     local out = {}
 
-    if res.code ~= 0 then
+    if res.code ~= 0 and res.code ~= 1 then
       cb(nil, res.stderr)
       return
     end
@@ -115,10 +104,30 @@ return function(opts)
     cwd = nil,
   }
   opts = vim.tbl_deep_extend("force", default_opts, opts or {})
+  opts.cwd = vim.fs.normalize(opts.cwd or vim.fn.getcwd())
+  ui.setup()
+  local session
 
   require("minibuffer").select({
     resumable = true,
-    prompt = "Grep: ",
+    prompt = "> ",
+    prompt_position = "top",
+    highlights = {
+      normal = "FzfLuaFzfNormal",
+      query = "FzfLuaLivePrompt",
+      prompt = "FzfLuaFzfPrompt",
+      selection = "FzfLuaFzfCursorLine",
+      multi_selection = "FzfLuaFzfNormal",
+      loading = "FzfLuaFzfSpinner",
+    },
+    header_fn = function(ctx, width)
+      return ui.header(ctx, width, opts.cwd)
+    end,
+    on_change = function()
+      if session then
+        ui.info(session)
+      end
+    end,
     multi = true,
     dynamic_height = false,
     max_height = 18,
@@ -127,13 +136,13 @@ return function(opts)
         run_grep(opts, input, cb)
       end)
     end,
-    format_fn = format_fn,
+    format_fn = ui.format,
     filter_fn = filter_fn,
     on_accept = function(selection)
       if #selection == 1 then
         local item = selection[1].item
 
-        vim.cmd("edit " .. vim.fs.joinpath(opts.cwd, vim.fn.fnameescape(item.file)))
+        vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(opts.cwd, item.file)))
         pcall(vim.api.nvim_win_set_cursor, 0, {
           item.line,
           item.col - 1,
@@ -147,7 +156,7 @@ return function(opts)
       for _, selected in ipairs(selection) do
         local item = selected.item
         qf[#qf + 1] = {
-          filename = vim.fs.joinpath(opts.cwd, vim.fn.fnameescape(item.file)),
+          filename = vim.fs.joinpath(opts.cwd, item.file),
           lnum = item.line,
           col = item.col,
           text = item.text,
@@ -158,12 +167,14 @@ return function(opts)
       vim.cmd("copen")
     end,
     on_start = function(sess, keyset)
+      session = sess
+      ui.info(sess)
       keyset("i", "<C-s>", function()
         local selected = sess:get_selected()
         if selected then
           sess:close(function()
             vim.cmd(
-              "split " .. vim.fs.joinpath(opts.cwd, vim.fn.fnameescape(selected.file))
+              "split " .. vim.fn.fnameescape(vim.fs.joinpath(opts.cwd, selected.file))
             )
             pcall(vim.api.nvim_win_set_cursor, 0, {
               selected.line,
@@ -178,7 +189,7 @@ return function(opts)
         if selected then
           sess:close(function()
             vim.cmd(
-              "vsplit " .. vim.fs.joinpath(opts.cwd, vim.fn.fnameescape(selected.file))
+              "vsplit " .. vim.fn.fnameescape(vim.fs.joinpath(opts.cwd, selected.file))
             )
             pcall(vim.api.nvim_win_set_cursor, 0, {
               selected.line,
@@ -188,15 +199,6 @@ return function(opts)
           end)
         end
       end)
-    end,
-    footer_fn = function(ctx)
-      return {
-        { #ctx.items .. " items", "Normal" },
-        {
-          " C-x toggle, C-a toggle-all, C-s split, C-v vsplit, C-d delete, C-y accept, C-n next, C-p prev",
-          "Comment",
-        },
-      }
     end,
   })
 end

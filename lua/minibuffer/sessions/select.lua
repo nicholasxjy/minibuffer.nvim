@@ -388,7 +388,7 @@ function SelectSession:render()
   end
   if self._loading then
     lines_data[#lines_data + 1] =
-      { { text = " … loading …", hl = "MinibufferLoading" } }
+      { { text = " … loading …", hl = self.highlights.loading or "MinibufferLoading" } }
   end
 
   -- Write lines and highlights

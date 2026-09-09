@@ -154,14 +154,16 @@ function M.footer(ctx, keymaps, total)
       chunks[#chunks + 1] = { action[2], "FzfLuaHeaderText" }
     end
   end
-  chunks[#chunks + 1] = {
-    ("  %d/%d%s"):format(
-      #ctx.items,
-      total,
-      #ctx.selected_indices > 0 and (" (%d)"):format(#ctx.selected_indices) or ""
-    ),
-    "FzfLuaFzfInfo",
-  }
+  if total ~= nil then
+    chunks[#chunks + 1] = {
+      ("  %d/%d%s"):format(
+        #ctx.items,
+        total,
+        #ctx.selected_indices > 0 and (" (%d)"):format(#ctx.selected_indices) or ""
+      ),
+      "FzfLuaFzfInfo",
+    }
+  end
   return chunks
 end
 
