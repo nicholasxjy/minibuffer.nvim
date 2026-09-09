@@ -39,6 +39,7 @@ function M.setup()
     vim.api.nvim_set_hl(0, name, vim.tbl_extend("force", definition, { default = true }))
   end
   vim.api.nvim_set_hl(0, "MinibufferBuffersBold", { bold = true })
+  vim.api.nvim_set_hl(0, "MinibufferBuffersIcon", { bold = false, italic = false })
   local selection = vim.api.nvim_get_hl(0, { name = "FzfLuaFzfCursorLine", link = false })
   selection.bold = true
   vim.api.nvim_set_hl(0, "MinibufferBuffersSelection", selection)
@@ -51,7 +52,7 @@ function M.prepare(items)
     item.directory = item.directory or ""
     item.filename = item.filename or item.name
     item.file_width = vim.fn.strdisplaywidth(item.filename)
-      + (item.path ~= "" and vim.fn.strdisplaywidth(item.icon .. " :" .. item.lnum) or 0)
+      + (item.path ~= "" and vim.fn.strdisplaywidth(item.icon .. " :" .. item.lnum) or 0)
     width = math.max(width, item.file_width)
   end
   for _, item in ipairs(items) do
@@ -78,8 +79,12 @@ function M.format(item, ctx, index, filename_first)
     },
     { text = item.flags .. "  " },
   }
+  local icon_chunk
   if item.path ~= "" then
-    chunks[#chunks + 1] = { text = item.icon .. " ", hl = item.icon_hl }
+    -- A real space leaves room for Nerd Font glyphs; keep their font style
+    -- stable when the current row receives its bold overlay.
+    icon_chunk = { text = item.icon .. " ", hl = { item.icon_hl or "Normal", "MinibufferBuffersIcon" } }
+    chunks[#chunks + 1] = icon_chunk
   end
   local matches = {}
   for _, pos in ipairs(item.match_positions or {}) do
@@ -110,8 +115,10 @@ function M.format(item, ctx, index, filename_first)
   end
   if current then
     for _, chunk in ipairs(chunks) do
-      chunk.hl = chunk.hl and { chunk.hl, "MinibufferBuffersBold" }
-        or "MinibufferBuffersBold"
+      if chunk ~= icon_chunk then
+        chunk.hl = chunk.hl and { chunk.hl, "MinibufferBuffersBold" }
+          or "MinibufferBuffersBold"
+      end
     end
   end
   return chunks

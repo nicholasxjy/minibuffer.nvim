@@ -83,8 +83,8 @@ do
   if mark[2] == row then
     if mark[4].hl_group then
       assert(
-        mark[4].hl_group == "MinibufferBuffersBold",
-        "all current-row fields are bold"
+        mark[4].hl_group == "MinibufferBuffersBold" or mark[4].hl_group == "MinibufferBuffersIcon",
+        "current-row text is bold while icons keep their normal font style"
       )
     else
       assert(mark[4].line_hl_group == "MinibufferBuffersSelection")
@@ -208,6 +208,18 @@ assert(
 )
 picker = original_picker
 local aligned = { vim.deepcopy(all[1]), vim.deepcopy(all[2]) }
+local function icon_chunk(chunks, icon)
+  for _, chunk in ipairs(chunks) do
+    if chunk.text == icon .. " " then return chunk end
+  end
+end
+local regular_icon = assert(icon_chunk(ui.format(all[1]), all[1].icon))
+local active_icon = assert(icon_chunk(ui.format(all[1], {
+  current_index = 1, selected_indices = {},
+}, 1), all[1].icon))
+assert(vim.deep_equal(regular_icon.hl, active_icon.hl), "selection must not switch the icon font")
+assert(active_icon.hl[1] == all[1].icon_hl, "preserve the icon provider color")
+assert(active_icon.hl[2] == "MinibufferBuffersIcon")
 aligned[1].name, aligned[1].icon = "src/a.lua", "界"
 aligned[2].name, aligned[2].icon = "lib/较长文件.lua", "λ"
 ui.prepare(aligned)
