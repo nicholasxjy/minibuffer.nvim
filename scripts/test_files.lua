@@ -71,9 +71,9 @@ sess._items, sess._input = matched, "中文"
 vim.api.nvim_buf_set_lines(sess._entry.buf, 0, -1, false, { "Files> 中文" })
 picker.on_start(sess, function() end)
 local body = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
-local row = sess._header_height
+local row = 0
 assert(body[row + 1]:match("^界 中文%.lua +│ src$"), body[row + 1])
-assert(body[1] ~= "" and body[row] ~= "", "input, hints, then list with no gaps")
+assert(body[#body - sess._header_height + 1]:find("::", 1, true), "hints follow the list")
 assert(vim.api.nvim_win_get_position(sess._entry.win)[1] + 1
   == vim.api.nvim_win_get_position(sess._display.win)[1])
 local marks = vim.api.nvim_buf_get_extmarks(sess._display.buf,

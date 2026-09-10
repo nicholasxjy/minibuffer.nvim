@@ -62,15 +62,15 @@ sess._selected_indices = { 1 }
 vim.api.nvim_buf_set_lines(sess._entry.buf, 0, -1, false, { picker.prompt .. "中" })
 sess:render()
 local body = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
-local row = sess._header_height
+local row = 0
 local line = body[row + 1]
-assert(body[1] ~= "" and body[row] ~= "", "hints and list have no blank separators")
-assert(row > 1, "hints wrap across multiple lines")
+assert(body[#body - sess._header_height + 1]:find("::", 1, true), "hints follow the list")
+assert(sess._header_height > 1, "hints wrap across multiple lines")
 assert(vim.api.nvim_win_get_height(sess._entry.win) == 1)
 assert(
   vim.api.nvim_win_get_position(sess._entry.win)[1] + 1
     == vim.api.nvim_win_get_position(sess._display.win)[1],
-  "input precedes hints and list"
+  "input precedes list and hints"
 )
 assert(line:sub(1, 2) == ">>", "cursor and multi-select markers")
 assert(line:find("中文.lua:2", 1, true), line)
@@ -155,7 +155,9 @@ for _, hint in ipairs(picker.header_fn(sess:get_ctx(), 12)) do
   narrow_text = narrow_text .. value
 end
 assert(narrow_text:find("<ctrl-s/ctrl-w s> to split", 1, true))
-assert(narrow_text:find("<ctrl-p/up/shift-tab> to prev", 1, true))
+for _, action in ipairs({ "accept", "next", "prev" }) do
+  assert(not narrow_text:find("to " .. action, 1, true))
+end
 assert(narrow_text:find("1/3 (1)", 1, true))
 -- Resizing reflows hints without growing the list on every render.
 local columns = vim.o.columns
@@ -168,10 +170,10 @@ for _, width in ipairs({ 40, 100, columns }) do
   assert(vim.api.nvim_win_get_width(sess._entry.win) == width)
   assert(vim.api.nvim_win_get_width(sess._display.win) == width)
   local rows = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
-  for i = 1, sess._header_height do
+  for i = #rows - sess._header_height + 1, #rows do
     assert(vim.fn.strdisplaywidth(rows[i]) <= width)
   end
-  assert(rows[sess._header_height + 1]:find("中文.lua:2", 1, true))
+  assert(rows[1]:find("中文.lua:2", 1, true))
 end
 
 local directory_matches = picker.filter_fn({ input = "目录", items = all })

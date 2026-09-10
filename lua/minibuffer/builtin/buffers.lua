@@ -153,6 +153,7 @@ return function(opts)
       multi_selection = "FzfLuaFzfNormal",
     },
     prompt_position = "top",
+    header_position = "bottom",
     header_fn = function(ctx, width)
       return ui.hints(ctx, keymaps, #buffers, width)
     end,

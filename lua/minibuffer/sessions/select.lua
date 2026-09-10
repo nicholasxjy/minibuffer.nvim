@@ -43,6 +43,7 @@ end
 ---@field highlights table<string, string>
 ---@field footer_pos "left"|"center"|"right"
 ---@field prompt_position "top"|"bottom"
+---@field header_position "top"|"bottom"
 ---@field header_fn minibuffer.core.SelectHeaderFn|nil
 ---@field keymaps minibuffer.config.select.keymaps
 ---@field max_height integer
@@ -89,7 +90,9 @@ SelectSession = SelectSession
 ---@field footer_pos "left"|"center"|"right"|nil
 ---Place the input above or below the results.
 ---@field prompt_position "top"|"bottom"|nil
----Wrapped hint lines between a top input and the results.
+---Place wrapped hints above or below the results (default top).
+---@field header_position "top"|"bottom"|nil
+---Wrapped hint lines for a top input layout.
 ---@field header_fn minibuffer.core.SelectHeaderFn|nil
 ---The max height the minibuffer can grow to
 ---@field max_height integer|nil
@@ -146,6 +149,7 @@ function SelectSession.new(opts)
     footer_pos = opts.footer_pos or "right",
     prompt_position = opts.prompt_position or "bottom",
     header_fn = opts.header_fn,
+    header_position = opts.header_position or "top",
     max_height = opts.max_height or 15,
     multi = opts.multi == true,
     dynamic_height = opts.dynamic_height == true,
@@ -329,13 +333,12 @@ function SelectSession:render()
   local prev_display_height = vim.api.nvim_win_get_height(self._display.win)
     - self._header_height
   local ctx = self:get_ctx()
-  local lines_data = {}
-  if self.prompt_position == "top" then
-    if self.header_fn then
-      vim.list_extend(lines_data, self.header_fn(ctx, vim.o.columns))
-    end
+  local hints = {}
+  if self.prompt_position == "top" and self.header_fn then
+    hints = self.header_fn(ctx, vim.o.columns)
   end
-  self._header_height = #lines_data
+  local lines_data = self.header_position == "top" and vim.list_extend({}, hints) or {}
+  self._header_height = #hints
   local total = #self._items
   local result_rows = total
   if self.group_fn then
@@ -427,9 +430,17 @@ function SelectSession:render()
     item_rows[i] = #lines_data
     lines_data[#lines_data + 1] = self.format_fn(self._items[i], ctx, i)
   end
-  if self._loading then
+  if self._loading and (self.header_position ~= "bottom" or #lines_data < display_height) then
     lines_data[#lines_data + 1] =
       { { text = " … loading …", hl = self.highlights.loading or "MinibufferLoading" } }
+  end
+
+  if self.header_position == "bottom" then
+    -- Keep hints at the bottom even when the fixed viewport has empty rows.
+    while #lines_data < display_height do
+      lines_data[#lines_data + 1] = {}
+    end
+    vim.list_extend(lines_data, hints)
   end
 
   -- Write lines and highlights

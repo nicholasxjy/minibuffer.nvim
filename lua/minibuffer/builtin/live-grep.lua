@@ -161,6 +161,7 @@ return function(opts)
       multi_selection = "FzfLuaFzfNormal",
       loading = "FzfLuaFzfSpinner",
     },
+    header_position = "bottom",
     header_fn = function(ctx, width)
       return ui.header(ctx, width, opts.cwd, keymaps)
     end,

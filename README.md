@@ -162,8 +162,8 @@ These builtin defaults do not change custom `minibuffer.select()` calls or
 third-party integrations.
 
 The builtin `live-grep` picker uses fzf-lua's reverse layout inside the bottom
-minibuffer: input and right-aligned result/selection counts, wrapped action
-hints, then results grouped by file. Each file has one non-selectable heading;
+minibuffer: input and right-aligned result/selection counts, results grouped by file, then wrapped action
+hints at the bottom. Each file has one non-selectable heading;
 scrolling repeats the heading at the top of the visible results. File icons, directory/file names, line and
 column numbers, pointer, selection marker, and the current row use the
 corresponding `FzfLua*` highlight groups. Live input uses `FzfLuaLivePrompt`;
@@ -248,7 +248,7 @@ persist in `stdpath("data")/minibuffer/frecency.json`. `history_bonus` selects t
 history boundary-scoring scheme; it is not another timestamp-based recency score.
 Empty queries also rank by bonuses. All four switches are independent.
 
-Layout is input → wrapped hints → results, without blank separators. Hints use
+Layout is input → results → wrapped hints at the bottom. Hints use
 the buffers picker's `FzfLuaHeaderBind` / `FzfLuaHeaderText` groups. Filename-first
 rows use the fzf-lua integration's format: icon, padded filename, `│`, dim directory.
 The separator column is aligned across the complete candidate list (including
@@ -360,8 +360,8 @@ vim.keymap.set("n", "<leader>fq", function()
 end, { desc = "Find in quickfix" })
 ```
 
-The buffers picker displays the input, wrapping action hints, and results from
-top to bottom without blank lines between sections. Hints wrap to the window
+The buffers picker displays the input, results, and wrapping action hints from
+top to bottom. Hints wrap to the window
 width and keep complete actions together when possible. The list shows
 `[number]`, current/alternate, loaded, read-only, and modified flags, a file icon,
 and `filename:line` followed by an aligned directory column. Set
@@ -373,7 +373,7 @@ highlights; Unicode filenames are supported. The `Buffers> ` prompt and
 colors for keys and descriptions and a filtered/total/selected count. Directories
 use `FzfLuaDirPart` (the same group as fzf-lua's `path.filename_first` formatter).
 The current row is bold, including its icon, flags, and directory, while keeping
-each field's color. Disabled actions are omitted from the hints. Existing theme
+each field's color. Disabled actions and `accept`, `next`, and `prev` are omitted from builtin hints. Existing theme
 definitions are preserved;
 when fzf-lua is absent, the picker defines matching default colors itself.
 It remains a native minibuffer picker and does not require fzf-lua or fzf.

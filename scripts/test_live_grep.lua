@@ -56,7 +56,7 @@ sess:render()
 assert(vim.api.nvim_win_get_position(sess._entry.win)[1] + 1
   == vim.api.nvim_win_get_position(sess._display.win)[1], "input above hints/results")
 local lines = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
-local row = sess._header_height + 1
+local row = 1
 assert(lines[1] ~= "" and lines[row] ~= "", "no blank separators")
 assert(lines[row] == "  界 中文 file.lua  src", lines[row])
 assert(lines[row + 1] == ">> 1:5 │ 前 test1 中 test2", lines[row + 1])
@@ -114,7 +114,7 @@ for i = 1, #many do
   sess._current_index = i
   sess:render()
   assert(sess:get_selected() == sess._items[i], "navigation selects matches only")
-  local body = vim.api.nvim_buf_get_lines(sess._display.buf, sess._header_height, -1, false)
+  local body = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1 - sess._header_height, false)
   assert(body[1]:find(".lua", 1, true), "scrolling retains a file header")
   assert(#body <= 5, "group titles count towards the viewport height")
   assert(table.concat(body):find(">", 1, true), "current item remains visible")

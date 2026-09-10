@@ -679,6 +679,7 @@ minibuffer.core.SelectSession : minibuffer.core.Session
         {highlights}         (table<string,string>)
         {footer_pos}         ("left"|"center"|"right")
         {prompt_position}    ("top"|"bottom")
+        {header_position}    ("top"|"bottom")
         {header_fn}          (minibuffer.core.SelectHeaderFn|nil)
         {keymaps}            (minibuffer.config.select.keymaps)
         {max_height}         (integer)
@@ -720,7 +721,8 @@ minibuffer.core.SelectSessionOpts            *minibuffer.core.SelectSessionOpts*
         {highlights}      (table<string,string>|nil)                Per-session normal, query, prompt, selection and multi-selection groups.
         {footer_pos}      ("left"|"center"|"right"|nil)               Alignment of the action hints.
         {prompt_position} ("top"|"bottom"|nil)                       Place the input above or below the results.
-        {header_fn}       (minibuffer.core.SelectHeaderFn|nil)       Wrapped hint lines between a top input and the results.
+        {header_position} ("top"|"bottom"|nil)                       Place wrapped hints above or below the results (default top).
+        {header_fn}       (minibuffer.core.SelectHeaderFn|nil)       Wrapped hint lines for a top input layout.
         {max_height}      (integer|nil)                              The max height the minibuffer can grow to
         {multi}           (boolean|nil)                              Whether the user will be allowed to select multiple items
         {dynamic_height}  (boolean|nil)                              Whether the minibuffer should ever shrink as the items decrease

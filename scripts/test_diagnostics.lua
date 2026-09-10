@@ -63,7 +63,10 @@ local hints = ""
 for _, line in ipairs(picker.header_fn({ items = items, selected_indices = {} }, 120)) do
   for _, chunk in ipairs(line) do hints = hints .. chunk.text end
 end
-assert(hints:find("ctrl-j/down", 1, true) and hints:find("ctrl-k/up", 1, true))
+for _, action in ipairs({ "accept", "next", "prev" }) do
+  assert(not hints:find("to " .. action, 1, true))
+end
+assert(picker.header_position == "bottom")
 for _, chunk in ipairs(picker.format_fn(items[1], { current_index = 2, selected_indices = {} }, 1)) do
   assert(type(chunk.hl) ~= "table", "non-current rows must not receive bold overlay")
 end

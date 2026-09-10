@@ -153,7 +153,8 @@ function M.decorate(sess, opts, current_file)
   for i = sess._scroll_offset + 1, math.min(#sess._items, sess._scroll_offset + height) do
     local item = sess._items[i]
     local active = i == sess._current_index
-    local row = sess._header_height + i - sess._scroll_offset - 1
+    local row = (sess.header_position == "top" and sess._header_height or 0)
+      + i - sess._scroll_offset - 1
     local char = signs[item.git_status]
     local group = opts.hl["git_sign_" .. (item.git_status:match("^staged") and "staged" or item.git_status)
       .. (active and "_selected" or "")]

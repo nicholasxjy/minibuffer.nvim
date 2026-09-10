@@ -130,6 +130,7 @@ return function(opts)
       normal = opts.hl.normal, query = opts.hl.normal, prompt = opts.hl.prompt,
       selection = opts.hl.cursor, multi_selection = opts.hl.normal,
     },
+    header_position = "bottom",
     header_fn = function(ctx, width)
       return require("minibuffer.builtin.buffers-ui").hints(ctx, {
         split = keymaps.split, vsplit = keymaps.vsplit, delete = {},

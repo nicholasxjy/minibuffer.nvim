@@ -124,6 +124,7 @@ return function(opts)
       normal = "FzfLuaFzfNormal", query = "FzfLuaFzfQuery", prompt = "FzfLuaFzfPrompt",
       selection = "MinibufferBuffersSelection", multi_selection = "FzfLuaFzfNormal",
     },
+    header_position = "bottom",
     header_fn = function(ctx, width) return ui.header(ctx, width, vim.fn.getcwd(), keymaps) end,
     on_change = function() if session then ui.info(session) end end,
     fetch_fn = function(_, cb) cb(items) end,

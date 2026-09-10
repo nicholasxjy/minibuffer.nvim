@@ -132,9 +132,6 @@ function M.footer(ctx, keymaps, total)
     { keymaps.delete, "delete" },
     { keymaps.toggle or "<C-x>", "toggle" },
     { keymaps.toggle_all or "<C-a>", "toggle-all" },
-    { keymaps.accept or "<CR>", "accept" },
-    { keymaps.next, "next" },
-    { keymaps.previous, "prev" },
   }
   local first = true
   for _, action in ipairs(actions) do
