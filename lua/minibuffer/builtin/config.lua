@@ -1,17 +1,11 @@
 local M = {}
 
-local row_groups = {
-  FzfLuaDirPart = "directory_path",
-  FzfLuaFilePart = "file",
-  FzfLuaFzfMatch = "matched",
-  MinibufferGrepMatch = "matched",
-  FzfLuaFzfPointer = "pointer",
-  FzfLuaFzfMarker = "marker",
-  FzfLuaPathLineNr = "line_number",
-  FzfLuaPathColNr = "column_number",
-  FzfLuaFzfInfo = "info",
-  FzfLuaHeaderBind = "header_bind",
-  FzfLuaHeaderText = "header_text",
+local file_groups = {
+  selection = "cursor",
+  directory_path = "directory_path",
+  matched = "matched",
+  normal = "normal",
+  prompt = "prompt",
 }
 
 -- Merge maps by field, but replace lists (including {}) as a whole.
@@ -38,19 +32,14 @@ function M.resolve(opts, defaults)
       "force",
       {},
       config.select.keymaps,
+      defaults and defaults.keymaps or {},
       config.builtin.keymaps,
       opts and opts.keymaps or {}
     )
   )
   for _, layer in ipairs({ config.builtin, opts or {} }) do
     for key, value in pairs(layer.highlights or {}) do
-      local name = ({
-        selection = "cursor",
-        directory_path = "directory_path",
-        matched = "matched",
-        normal = "normal",
-        prompt = "prompt",
-      })[key]
+      local name = file_groups[key]
       if name then
         resolved.hl[name] = value
       end
@@ -60,11 +49,8 @@ function M.resolve(opts, defaults)
   return resolved
 end
 
-function M.bind(keyset, keys, callback)
-  for _, key in ipairs(type(keys) == "string" and { keys } or keys or {}) do
-    keyset("i", key, callback)
-  end
-end
+-- Compatibility for callers using the former shared binding helper.
+M.bind = require("minibuffer.builtin.actions").bind
 
 -- Keep picker-specific rendering defaults unless explicitly overridden.
 function M.select(opts, session)
@@ -76,58 +62,7 @@ function M.select(opts, session)
       session[key] = opts[key]
     end
   end
-  if opts.pointer ~= nil and session.format_fn then
-    local render = session.format_fn
-    local function is_pointer(group)
-      if type(group) == "table" then
-        for _, child in ipairs(group) do
-          if is_pointer(child) then return true end
-        end
-      end
-      return group == "FzfLuaFzfPointer"
-    end
-    session.format_fn = function(item, ctx, index)
-      local chunks = vim.deepcopy(render(item, ctx, index))
-      local text = ctx and ctx.current_index == index and opts.pointer
-        or string.rep(" ", vim.fn.strdisplaywidth(opts.pointer))
-      if chunks[1] and is_pointer(chunks[1].hl) then
-        chunks[1].text = text
-      elseif opts.pointer ~= "" then
-        table.insert(chunks, 1, { text = text .. " ", hl = "FzfLuaFzfPointer" })
-      end
-      return chunks
-    end
-  end
-  local function highlight(group)
-    if type(group) == "table" then
-      return vim.tbl_map(highlight, group)
-    end
-    return opts.highlights[row_groups[group]] or group
-  end
-  local function decorate(value)
-    if type(value) ~= "table" then
-      return value
-    end
-    local result = vim.deepcopy(value)
-    if result.text then
-      result.hl = highlight(result.hl)
-    elseif type(result[1]) == "string" then
-      result[2] = highlight(result[2])
-    else
-      for key, child in pairs(result) do
-        result[key] = decorate(child)
-      end
-    end
-    return result
-  end
-  for _, key in ipairs({ "format_fn", "group_fn", "header_fn", "footer_fn" }) do
-    local render = session[key]
-    if render and next(opts.highlights) then
-      session[key] = function(...)
-        return decorate(render(...))
-      end
-    end
-  end
+  require("minibuffer.builtin.render").configure(opts, session)
   return require("minibuffer").select(session)
 end
 

@@ -1,3 +1,4 @@
+local config = require("minibuffer.builtin.config")
 ---@class minibuffer.builtin.Manpage
 ---@field name string
 ---@field section string
@@ -63,9 +64,7 @@ local function filter_fn(ctx)
 
   local exact = {}
   local prefix = {}
-  local fuzzy = {}
   local fuzzy_items = {}
-  local fuzzy_lookup = {}
   for _, item in ipairs(ctx.items) do
     local name = item.name:lower()
     if name == input then
@@ -73,8 +72,7 @@ local function filter_fn(ctx)
     elseif vim.startswith(name, input) then
       prefix[#prefix + 1] = item
     else
-      fuzzy_items[#fuzzy_items + 1] = item.search
-      fuzzy_lookup[item.search] = item
+      fuzzy_items[#fuzzy_items + 1] = item
     end
   end
 
@@ -84,30 +82,18 @@ local function filter_fn(ctx)
   end)
 
   -- Fuzzy matches are ranked by matchfuzzy().
-  local matches = vim.fn.matchfuzzy(fuzzy_items, input)
-  for _, key in ipairs(matches) do
-    fuzzy[#fuzzy + 1] = fuzzy_lookup[key]
-  end
-
-  local results = {}
-  for _, item in ipairs(exact) do
-    results[#results + 1] = item
-  end
-  for _, item in ipairs(prefix) do
-    results[#results + 1] = item
-  end
-  for _, item in ipairs(fuzzy) do
-    results[#results + 1] = item
-  end
+  local fuzzy = vim.fn.matchfuzzy(fuzzy_items, input, { key = "search" })
+  local results = vim.list_extend(exact, prefix)
+  vim.list_extend(results, fuzzy)
 
   return results
 end
 
 return function(opts)
   require("minibuffer.internal.guard").check()
-  opts = require("minibuffer.builtin.config").resolve(opts)
+  opts = config.resolve(opts)
 
-  require("minibuffer.builtin.config").select(opts, {
+  config.select(opts, {
     resumable = true,
     prompt = "Manpages: ",
     multi = false,
@@ -135,7 +121,7 @@ return function(opts)
       end)
     end,
     on_accept = function(selection)
-      local item = selection[1].item
+      local item = selection[1] and selection[1].item
       if not item then
         return
       end

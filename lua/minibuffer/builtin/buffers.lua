@@ -1,3 +1,5 @@
+local actions = require("minibuffer.builtin.actions")
+local config = require("minibuffer.builtin.config")
 local ui = require("minibuffer.builtin.buffers-ui")
 
 local function update_preview_win(win, buf)
@@ -108,8 +110,6 @@ local function get_replacement_buf(current)
   return vim.api.nvim_create_buf(false, true)
 end
 
-local bind = require("minibuffer.builtin.config").bind
-
 ---@class minibuffer.builtin.BuffersKeymaps
 ---@field split? string|string[]
 ---@field vsplit? string|string[]
@@ -126,8 +126,7 @@ local bind = require("minibuffer.builtin.config").bind
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = require("minibuffer.builtin.config").resolve(opts)
-  vim.validate("filename_first", opts.filename_first, "boolean", true)
+  opts = config.resolve(opts)
   ui.setup()
   local keymaps = opts.keymaps
   local active_win
@@ -141,9 +140,8 @@ return function(opts)
   local minibuffer = require("minibuffer")
   local prev_buf = vim.api.nvim_get_current_buf()
 
-  require("minibuffer.builtin.config").select(opts, {
+  config.select(opts, {
     resumable = true,
-    keymaps = { next = keymaps.next, previous = keymaps.previous },
     prompt = "Buffers> ",
     highlights = {
       normal = "FzfLuaFzfNormal",
@@ -185,18 +183,14 @@ return function(opts)
         return
       end
 
-      local qf = {}
-      for _, selected in ipairs(selection) do
-        local item = selected.item
-        qf[#qf + 1] = {
+      actions.quickfix(selection, "Selected Buffers", function(item)
+        return {
           filename = item.path ~= "" and item.path or item.name,
           text = "#" .. item.bufnr,
           lnum = 1,
           col = 1,
         }
-      end
-      vim.fn.setqflist({}, " ", { title = "Selected Buffers", items = qf })
-      vim.cmd("copen")
+      end)
     end,
     on_close = function()
       if active_win then
@@ -209,25 +203,11 @@ return function(opts)
         return
       end
 
-      bind(keyset, keymaps.split, function()
-        local selected = sess:get_selected()
-        if selected then
-          sess:close(function()
-            vim.cmd("split")
-            vim.api.nvim_set_current_buf(selected.bufnr)
-          end)
-        end
+      actions.bind_open(sess, keyset, keymaps, function(item, command)
+        vim.cmd(command)
+        vim.api.nvim_set_current_buf(item.bufnr)
       end)
-      bind(keyset, keymaps.vsplit, function()
-        local selected = sess:get_selected()
-        if selected then
-          sess:close(function()
-            vim.cmd("vsplit")
-            vim.api.nvim_set_current_buf(selected.bufnr)
-          end)
-        end
-      end)
-      bind(keyset, keymaps.delete, function()
+      actions.bind(keyset, keymaps.delete, function()
         local selected = sess:get_selected()
         if selected and vim.api.nvim_buf_is_valid(selected.bufnr) then
           update_preview_win(active_win, get_replacement_buf(selected.bufnr))

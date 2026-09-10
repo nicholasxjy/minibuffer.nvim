@@ -1,14 +1,11 @@
+local actions = require("minibuffer.builtin.actions")
+local config = require("minibuffer.builtin.config")
 if vim.fn.executable("rg") == 0 then
   vim.notify("rg is required for using the grep picker")
   return function() end
 end
 
-local util = require("minibuffer.internal.util")
 local ui = require("minibuffer.builtin.live-grep-ui")
-
-local debounce = util.make_debounced(100)
-local generation = 0
-local current_proc ---@type vim.SystemObj?
 
 local function parse_rg_line(line)
   local event = vim.json.decode(line)
@@ -58,50 +55,73 @@ local function filter_fn(ctx, current_file, cwd)
   return items
 end
 
-local function run_grep(opts, input, cb)
-  generation = generation + 1
-  local current = generation
-  if current_proc then
-    current_proc:kill("sigterm")
-    current_proc = nil
-  end
-  if input == "" then
-    cb({})
-    return
-  end
-
-  local cmd = vim.list_extend({}, opts.rg_opts)
-  cmd[#cmd + 1] = "--json"
-  cmd[#cmd + 1] = "-e"
-  cmd[#cmd + 1] = input
-
-  local system_opts = { text = true }
-
-  if opts.cwd then
-    system_opts.cwd = opts.cwd
-  end
-
-  current_proc = vim.system(cmd, system_opts, function(res)
-    if current ~= generation then
-      return
-    end
-    current_proc = nil
-
-    local out = {}
-
-    if res.code ~= 0 and res.code ~= 1 then
-      cb(nil, res.stderr)
-      return
-    end
-
-    for _, line in ipairs(vim.split(res.stdout, "\n", { trimempty = true })) do
-      local item = parse_rg_line(line)
-      if item then
-        out[#out + 1] = item
+-- Each picker owns its debounce timer, process and stale-result generation.
+local function new_search(opts)
+  local timer ---@type uv.uv_timer_t?
+  local generation = 0
+  local current_proc ---@type vim.SystemObj?
+  local function cancel()
+    generation = generation + 1
+    if timer then
+      timer:stop()
+      if not timer:is_closing() then
+        timer:close()
       end
+      timer = nil
     end
-    cb(out)
-  end)
+    if current_proc then
+      current_proc:kill("sigterm")
+      current_proc = nil
+    end
+  end
+  local function run_grep(input, cb, current)
+    local cmd = vim.list_extend({}, opts.rg_opts)
+    cmd[#cmd + 1] = "--json"
+    cmd[#cmd + 1] = "-e"
+    cmd[#cmd + 1] = input
+
+    local system_opts = { text = true }
+
+    if opts.cwd then
+      system_opts.cwd = opts.cwd
+    end
+
+    current_proc = vim.system(cmd, system_opts, function(res)
+      if current ~= generation then
+        return
+      end
+      current_proc = nil
+
+      local out = {}
+
+      if res.code ~= 0 and res.code ~= 1 then
+        cb(nil, res.stderr)
+        return
+      end
+
+      for _, line in ipairs(vim.split(res.stdout, "\n", { trimempty = true })) do
+        local item = parse_rg_line(line)
+        if item then
+          out[#out + 1] = item
+        end
+      end
+      cb(out)
+    end)
+  end
+  local function fetch(input, cb)
+    cancel()
+    if input == "" then
+      return cb({})
+    end
+    local current = generation
+    timer = vim.defer_fn(function()
+      timer = nil
+      if current == generation then
+        run_grep(input, cb, current)
+      end
+    end, 100)
+  end
+  return fetch, cancel
 end
 
 ---@class minibuffer.builtin.LiveGrepOpts: minibuffer.builtin.Opts
@@ -115,7 +135,9 @@ end
 ---@param opts? minibuffer.builtin.LiveGrepOpts|string
 return function(opts)
   require("minibuffer.internal.guard").check()
-  if type(opts) == "string" then opts = { query = opts } end
+  if type(opts) == "string" then
+    opts = { query = opts }
+  end
 
   ---@type minibuffer.builtin.LiveGrepOpts
   local default_opts = {
@@ -134,20 +156,26 @@ return function(opts)
     },
     cwd = nil,
   }
-  opts = require("minibuffer.builtin.config").resolve(opts, default_opts)
+  opts = config.resolve(opts, default_opts)
   opts.cwd = vim.fs.normalize(opts.cwd or vim.fn.getcwd())
   vim.validate("current_file_first", opts.current_file_first, "boolean", true)
   local current_file = opts.current_file_first and vim.api.nvim_buf_get_name(0) or nil
-  if current_file and current_file ~= "" then current_file = vim.fs.normalize(current_file) end
-  vim.validate("filename_first", opts.filename_first, "boolean", true)
+  if current_file and current_file ~= "" then
+    current_file = vim.fs.normalize(current_file)
+  end
   local keymaps = opts.keymaps
   ui.setup()
   local session
+  local fetch, cancel = new_search(opts)
+  local function open(item, command)
+    actions.open_file(vim.fs.joinpath(opts.cwd, item.file), command)
+    pcall(vim.api.nvim_win_set_cursor, 0, { item.line, item.col - 1 })
+    vim.cmd("normal! zz")
+  end
 
-  require("minibuffer.builtin.config").select(opts, {
+  config.select(opts, {
     query = opts.query,
     resumable = true,
-    keymaps = keymaps,
     group_fn = function(item, previous)
       return ui.group(item, previous, opts.filename_first)
     end,
@@ -173,76 +201,30 @@ return function(opts)
     multi = true,
     dynamic_height = false,
     max_height = 18,
-    fetch_fn = function(input, cb)
-      debounce(function()
-        run_grep(opts, input, cb)
-      end)
-    end,
+    fetch_fn = fetch,
+    on_close = cancel,
     format_fn = ui.format,
     filter_fn = function(ctx)
       return filter_fn(ctx, current_file, opts.cwd)
     end,
     on_accept = function(selection)
       if #selection == 1 then
-        local item = selection[1].item
-
-        vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(opts.cwd, item.file)))
-        pcall(vim.api.nvim_win_set_cursor, 0, {
-          item.line,
-          item.col - 1,
-        })
-        vim.cmd("normal! zz")
-        return
+        return open(selection[1].item, "edit")
       end
 
-      local qf = {}
-
-      for _, selected in ipairs(selection) do
-        local item = selected.item
-        qf[#qf + 1] = {
+      actions.quickfix(selection, "Grep Results", function(item)
+        return {
           filename = vim.fs.joinpath(opts.cwd, item.file),
           lnum = item.line,
           col = item.col,
           text = item.text,
         }
-      end
-
-      vim.fn.setqflist({}, " ", { title = "Grep Results", items = qf })
-      vim.cmd("copen")
+      end)
     end,
     on_start = function(sess, keyset)
       session = sess
       ui.info(sess)
-      require("minibuffer.builtin.config").bind(keyset, keymaps.split, function()
-        local selected = sess:get_selected()
-        if selected then
-          sess:close(function()
-            vim.cmd(
-              "split " .. vim.fn.fnameescape(vim.fs.joinpath(opts.cwd, selected.file))
-            )
-            pcall(vim.api.nvim_win_set_cursor, 0, {
-              selected.line,
-              selected.col - 1,
-            })
-            vim.cmd("normal! zz")
-          end)
-        end
-      end)
-      require("minibuffer.builtin.config").bind(keyset, keymaps.vsplit, function()
-        local selected = sess:get_selected()
-        if selected then
-          sess:close(function()
-            vim.cmd(
-              "vsplit " .. vim.fn.fnameescape(vim.fs.joinpath(opts.cwd, selected.file))
-            )
-            pcall(vim.api.nvim_win_set_cursor, 0, {
-              selected.line,
-              selected.col - 1,
-            })
-            vim.cmd("normal! zz")
-          end)
-        end
-      end)
+      actions.bind_open(sess, keyset, keymaps, open)
     end,
   })
 end

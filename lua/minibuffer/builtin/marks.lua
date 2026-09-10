@@ -1,3 +1,4 @@
+local config = require("minibuffer.builtin.config")
 ---@class minibuffer.builtin.Mark
 ---@field mark string
 ---@field file string
@@ -23,6 +24,7 @@ local function gather_marks()
           lnum = mark.pos[2],
           col = mark.pos[3],
           text = vim.trim(line),
+          search_text = table.concat({ mark.mark:sub(2), file, vim.trim(line) }, " "),
         }
       end
     end
@@ -43,38 +45,14 @@ local function format_fn(item)
   }
 end
 
-local function filter_fn(ctx)
-  if ctx.input == "" then
-    return ctx.items
-  end
-
-  local lookup = {}
-  local keys = {}
-  for _, item in ipairs(ctx.items) do
-    local key = table.concat({
-      item.mark,
-      item.file,
-      item.text,
-    }, " ")
-    keys[#keys + 1] = key
-    lookup[key] = item
-  end
-
-  local matches = vim.fn.matchfuzzy(keys, ctx.input)
-  local results = {}
-  for _, key in ipairs(matches) do
-    results[#results + 1] = lookup[key]
-  end
-
-  return results
-end
+local filter_fn = require("minibuffer.builtin.match").fuzzy("search_text")
 
 return function(opts)
   require("minibuffer.internal.guard").check()
-  opts = require("minibuffer.builtin.config").resolve(opts)
+  opts = config.resolve(opts)
 
   local marks = gather_marks()
-  require("minibuffer.builtin.config").select(opts, {
+  config.select(opts, {
     resumable = true,
     prompt = "Marks: ",
     multi = false,
@@ -86,7 +64,7 @@ return function(opts)
     format_fn = format_fn,
     filter_fn = filter_fn,
     on_accept = function(selection)
-      local item = selection[1].item
+      local item = selection[1] and selection[1].item
       if not item then
         return
       end

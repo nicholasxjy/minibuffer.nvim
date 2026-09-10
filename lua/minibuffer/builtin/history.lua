@@ -1,3 +1,4 @@
+local config = require("minibuffer.builtin.config")
 local function gather_history(kind)
   local histtype = kind == "search" and "/" or ":"
   local items = {}
@@ -21,28 +22,7 @@ local function format_fn(item)
   }
 end
 
-local function filter_fn(ctx)
-  if ctx.input == "" then
-    return ctx.items
-  end
-
-  local texts = {}
-  local lookup = {}
-
-  for _, item in ipairs(ctx.items) do
-    texts[#texts + 1] = item.text
-    lookup[item.text] = item
-  end
-
-  local matches = vim.fn.matchfuzzy(texts, ctx.input)
-
-  local results = {}
-  for _, text in ipairs(matches) do
-    results[#results + 1] = lookup[text]
-  end
-
-  return results
-end
+local filter_fn = require("minibuffer.builtin.match").fuzzy("text")
 
 ---@class minibuffer.builtin.HistoryOpts: minibuffer.builtin.Opts
 ---@field type? "cmd"|"search"
@@ -51,10 +31,11 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = require("minibuffer.builtin.config").resolve(opts)
+  opts = config.resolve(opts, { type = "cmd" })
+  assert(opts.type == "cmd" or opts.type == "search", "type must be cmd or search")
   local items = gather_history(opts.type)
 
-  require("minibuffer.builtin.config").select(opts, {
+  config.select(opts, {
     resumable = true,
     prompt = opts.type == "search" and "Search History: " or "Command History: ",
     multi = false,
@@ -66,7 +47,7 @@ return function(opts)
     format_fn = format_fn,
     filter_fn = filter_fn,
     on_accept = function(selection)
-      local item = selection[1].item
+      local item = selection[1] and selection[1].item
       if not item then
         return
       end

@@ -110,6 +110,9 @@ vim.g.minibuffer = {
 
 # Builtin
 
+For module responsibilities and regression checks, see
+[Maintaining builtin pickers](doc/builtin-development.md).
+
 Customize the input prefix and current-row icon globally or per picker:
 
 ```lua

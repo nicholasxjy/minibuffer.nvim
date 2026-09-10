@@ -1,6 +1,5 @@
-local function is_in_cwd(path, cwd)
-  return vim.fs.relpath(cwd, path) ~= nil
-end
+local actions = require("minibuffer.builtin.actions")
+local config = require("minibuffer.builtin.config")
 
 local function gather_oldfiles(cwd)
   local files = vim.v.oldfiles or {}
@@ -10,7 +9,7 @@ local function gather_oldfiles(cwd)
   for _, path in ipairs(files) do
     path = vim.fn.fnamemodify(path, ":p")
     if vim.fn.filereadable(path) == 1 then
-      if not cwd or is_in_cwd(path, cwd) then
+      if not cwd or vim.fs.relpath(cwd, path) ~= nil then
         items[#items + 1] = {
           path = path,
           name = vim.fn.fnamemodify(path, ":t"),
@@ -30,27 +29,7 @@ local function format_fn(item)
   }
 end
 
-local function filter_fn(ctx)
-  if ctx.input == "" then
-    return ctx.items
-  end
-
-  local paths = {}
-  local lookup = {}
-
-  for _, item in ipairs(ctx.items) do
-    paths[#paths + 1] = item.path
-    lookup[item.path] = item
-  end
-  local matches = vim.fn.matchfuzzy(paths, ctx.input)
-
-  local results = {}
-  for _, path in ipairs(matches) do
-    results[#results + 1] = lookup[path]
-  end
-
-  return results
-end
+local filter_fn = require("minibuffer.builtin.match").fuzzy("path")
 
 ---@class minibuffer.builtin.OldfilesOpts: minibuffer.builtin.Opts
 ---@field cwd string|nil
@@ -59,10 +38,11 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = require("minibuffer.builtin.config").resolve(opts)
+  opts = config.resolve(opts)
 
-  local oldfiles = gather_oldfiles(opts.cwd or (opts.filter.cwd and vim.fn.getcwd() or nil))
-  require("minibuffer.builtin.config").select(opts, {
+  local oldfiles =
+    gather_oldfiles(opts.cwd or (opts.filter.cwd and vim.fn.getcwd() or nil))
+  config.select(opts, {
     resumable = true,
     prompt = "Oldfiles: ",
     multi = true,
@@ -81,49 +61,30 @@ return function(opts)
     on_accept = function(selection)
       if #selection == 1 then
         local item = selection[1].item
-        vim.cmd("edit " .. vim.fn.fnameescape(item.path))
+        actions.open_file(item.path)
         vim.cmd('normal! g`"')
         return
       end
 
-      local qf = {}
-      for _, selected in ipairs(selection) do
-        local item = selected.item
-        qf[#qf + 1] = {
-          filename = vim.fn.fnameescape(item.path),
+      actions.quickfix(selection, "Selected Oldfiles", function(item)
+        return {
+          filename = item.path,
           lnum = 1,
           col = 1,
         }
-      end
-
-      vim.fn.setqflist({}, " ", { title = "Selected Oldfiles", items = qf })
-      vim.cmd("copen")
+      end)
     end,
     on_start = function(sess, keyset)
-      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.split, function()
-        local selected = sess:get_selected()
-        if selected then
-          if selected then
-            sess:close(function()
-              vim.cmd("split " .. vim.fn.fnameescape(selected.path))
-            end)
-          end
-        end
-      end)
-      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.vsplit, function()
-        local selected = sess:get_selected()
-        if selected then
-          if selected then
-            sess:close(function()
-              vim.cmd("vsplit " .. vim.fn.fnameescape(selected.path))
-            end)
-          end
-        end
+      actions.bind_open(sess, keyset, opts.keymaps, function(item, command)
+        actions.open_file(item.path, command)
       end)
     end,
     footer_fn = function(ctx)
-      return require("minibuffer.builtin.buffers-ui").footer(ctx,
-        vim.tbl_extend("force", opts.keymaps, { delete = {} }), #oldfiles)
+      return require("minibuffer.builtin.buffers-ui").footer(
+        ctx,
+        vim.tbl_extend("force", opts.keymaps, { delete = {} }),
+        #oldfiles
+      )
     end,
   })
 end

@@ -1,3 +1,4 @@
+local config = require("minibuffer.builtin.config")
 local function gather_items(kind)
   local list = kind == "loclist" and vim.fn.getloclist(0) or vim.fn.getqflist()
   local items = {}
@@ -12,6 +13,7 @@ local function gather_items(kind)
         lnum = entry.lnum,
         col = entry.col,
         text = entry.text or "",
+        search_text = table.concat({ file, tostring(entry.lnum), entry.text or "" }, " "),
       }
     end
   end
@@ -39,32 +41,7 @@ local function format_fn(item)
   }
 end
 
-local function filter_fn(ctx)
-  if ctx.input == "" then
-    return ctx.items
-  end
-
-  local lookup = {}
-  local keys = {}
-  for _, item in ipairs(ctx.items) do
-    local key = table.concat({
-      item.file,
-      tostring(item.lnum),
-      item.text,
-    }, " ")
-
-    keys[#keys + 1] = key
-    lookup[key] = item
-  end
-
-  local matches = vim.fn.matchfuzzy(keys, ctx.input)
-  local results = {}
-  for _, key in ipairs(matches) do
-    results[#results + 1] = lookup[key]
-  end
-
-  return results
-end
+local filter_fn = require("minibuffer.builtin.match").fuzzy("search_text")
 
 ---@class minibuffer.builtin.ListOpts: minibuffer.builtin.Opts
 ---@field type? "quickfix"|"loclist"
@@ -73,10 +50,14 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = require("minibuffer.builtin.config").resolve(opts, { type = "quickfix" })
+  opts = config.resolve(opts, { type = "quickfix" })
+  assert(
+    opts.type == "quickfix" or opts.type == "loclist",
+    "type must be quickfix or loclist"
+  )
   local items = gather_items(opts.type)
 
-  require("minibuffer.builtin.config").select(opts, {
+  config.select(opts, {
     resumable = true,
     prompt = opts.type == "loclist" and "Location List: " or "Quickfix List: ",
     multi = false,
@@ -88,7 +69,7 @@ return function(opts)
     format_fn = format_fn,
     filter_fn = filter_fn,
     on_accept = function(selection)
-      local item = selection[1].item
+      local item = selection[1] and selection[1].item
       if not item then
         return
       end

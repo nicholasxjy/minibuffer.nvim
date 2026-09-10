@@ -1,15 +1,12 @@
+local actions = require("minibuffer.builtin.actions")
+local config = require("minibuffer.builtin.config")
 local function format_fn(item)
   return {
     { text = item, hl = "Normal" },
   }
 end
 
-local function filter_fn(ctx)
-  if ctx.input == "" then
-    return ctx.items
-  end
-  return vim.fn.matchfuzzy(ctx.items, ctx.input)
-end
+local filter_fn = require("minibuffer.builtin.match").fuzzy()
 
 ---@class minibuffer.builtin.GitFilesOpts: minibuffer.builtin.Opts
 ---@field cwd? string
@@ -19,7 +16,7 @@ end
 return function(opts)
   require("minibuffer.internal.guard").check()
 
-  opts = require("minibuffer.builtin.config").resolve(opts)
+  opts = config.resolve(opts)
   local cwd = vim.fn.fnamemodify(opts.cwd or vim.fn.getcwd(), ":p")
   opts.cwd = cwd
   local show_untracked = opts.show_untracked == true
@@ -40,7 +37,7 @@ return function(opts)
     return
   end
 
-  require("minibuffer.builtin.config").select(opts, {
+  config.select(opts, {
     resumable = true,
     prompt = "Git Files: ",
     multi = true,
@@ -77,50 +74,29 @@ return function(opts)
     on_accept = function(selection)
       if #selection == 1 then
         local item = selection[1].item
-        vim.cmd("edit " .. vim.fs.joinpath(opts.cwd, vim.fn.fnameescape(item)))
+        actions.open_file(vim.fs.joinpath(cwd, item))
         return
       end
 
-      local qf = {}
-      for _, selected in ipairs(selection) do
-        local item = selected.item
-        qf[#qf + 1] = {
+      actions.quickfix(selection, "Selected Files", function(item)
+        return {
           filename = vim.fs.joinpath(opts.cwd, item),
           lnum = 1,
           col = 1,
         }
-      end
-
-      vim.fn.setqflist({}, " ", { title = "Selected Files", items = qf })
-      vim.cmd("copen")
+      end)
     end,
     on_start = function(sess, keyset)
-      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.split, function()
-        local selected = sess:get_selected()
-        if selected then
-          if selected then
-            sess:close(function()
-              vim.cmd("split " .. vim.fs.joinpath(opts.cwd, vim.fn.fnameescape(selected)))
-            end)
-          end
-        end
-      end)
-      require("minibuffer.builtin.config").bind(keyset, opts.keymaps.vsplit, function()
-        local selected = sess:get_selected()
-        if selected then
-          if selected then
-            sess:close(function()
-              vim.cmd(
-                "vsplit " .. vim.fs.joinpath(opts.cwd, vim.fn.fnameescape(selected))
-              )
-            end)
-          end
-        end
+      actions.bind_open(sess, keyset, opts.keymaps, function(item, command)
+        actions.open_file(vim.fs.joinpath(cwd, item), command)
       end)
     end,
     footer_fn = function(ctx)
-      return require("minibuffer.builtin.buffers-ui").footer(ctx,
-        vim.tbl_extend("force", opts.keymaps, { delete = {} }), #ctx.items)
+      return require("minibuffer.builtin.buffers-ui").footer(
+        ctx,
+        vim.tbl_extend("force", opts.keymaps, { delete = {} }),
+        #ctx.items
+      )
     end,
   })
 end

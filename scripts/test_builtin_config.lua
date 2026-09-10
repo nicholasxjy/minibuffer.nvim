@@ -65,6 +65,40 @@ for _, bad in ipairs({
   assert(not pcall(common.resolve, bad), vim.inspect(bad))
 end
 
+-- Decoration must not mutate cached rows or share output between sessions.
+local cached = {
+  { text = ">", hl = { "FzfLuaFzfPointer", "MinibufferBuffersBold" } },
+  { text = "name", hl = "FzfLuaFilePart" },
+}
+local original = vim.deepcopy(cached)
+local function decorated(pointer, hl)
+  local session = {
+    format_fn = function()
+      return cached
+    end,
+    group_fn = function()
+      return nil
+    end,
+    footer_fn = function()
+      return { { "key", "FzfLuaHeaderBind" } }
+    end,
+  }
+  require("minibuffer.builtin.render").configure({
+    pointer = pointer,
+    highlights = { pointer = hl, header_bind = hl },
+  }, session)
+  return session
+end
+local first_render, second_render = decorated("界", "First"), decorated("→", "Second")
+local first_row = first_render.format_fn({}, { current_index = 1 }, 1)
+local second_row = second_render.format_fn({}, { current_index = 1 }, 1)
+assert(first_row[1].text == "界" and first_row[1].hl[1] == "First")
+assert(second_row[1].text == "→" and second_row[1].hl[1] == "Second")
+assert(vim.deep_equal(cached, original), "cached renderer output remains unchanged")
+assert(first_render.group_fn() == nil)
+assert(first_render.footer_fn()[1][2] == "First")
+assert(common.resolve({}, { keymaps = { custom = "<M-z>" } }).keymaps.custom == "<M-z>")
+
 local inside = vim.api.nvim_get_current_buf()
 vim.api.nvim_buf_set_name(inside, vim.fn.getcwd() .. "/src/inside.lua")
 local outside = vim.api.nvim_create_buf(true, false)
@@ -82,10 +116,13 @@ assert(picker.max_height == 9 and picker.highlights.normal == "TestNormal")
 assert(picker.prompt == "Search> " and picker.highlights.prompt == "TestPrompt")
 local active = picker.format_fn(items[1], { current_index = 1, selected_indices = {} }, 1)
 assert(active[1].text == "界" and active[1].hl[1] == "TestPointer")
-local inactive = picker.format_fn(items[1], { current_index = 0, selected_indices = {} }, 1)
+local inactive =
+  picker.format_fn(items[1], { current_index = 0, selected_indices = {} }, 1)
 assert(inactive[1].text == "  " and inactive[1].hl == "TestPointer")
 require("minibuffer.builtin.buffers")({
-  prompt = "Local> ", pointer = "→", highlights = { prompt = "LocalPrompt", pointer = "LocalPointer" },
+  prompt = "Local> ",
+  pointer = "→",
+  highlights = { prompt = "LocalPrompt", pointer = "LocalPointer" },
 })
 assert(picker.prompt == "Local> " and picker.highlights.prompt == "LocalPrompt")
 active = picker.format_fn(items[1], { current_index = 1, selected_indices = {} }, 1)
@@ -109,7 +146,10 @@ assert(picker.query == "TODO" and picker.max_height == 9)
 chunks = picker.group_fn({ file = "src/inside.lua" })
 assert(chunks[3].text == "src/" and chunks[3].hl == "TestDir")
 local grep_row = { line = 1, col = 1, location_width = 3, text = "text", matches = {} }
-assert(picker.format_fn(grep_row, { current_index = 1, selected_indices = {} }, 1)[1].text == "界")
+assert(
+  picker.format_fn(grep_row, { current_index = 1, selected_indices = {} }, 1)[1].text
+    == "界"
+)
 local bindings = {}
 local grep_ui = require("minibuffer.builtin.live-grep-ui")
 grep_ui.info = function() end
