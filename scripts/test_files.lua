@@ -156,6 +156,49 @@ for _, line in ipairs(picker.header_fn({ items = unrestricted, selected_indices 
 end
 assert(hint:find("ctrl-s/ctrl-w s", 1, true))
 assert(not hint:find("vsplit", 1, true) and not hint:find("toggle-all", 1, true))
+-- Git-first ordering is independent of decorations and preserves each group's rank.
+local normal_filter = picker.filter_fn
+files({ cwd = root, git_changed_first = true, show_git_status = false,
+  git = { status_text_color = false }, matcher = { frecency = false },
+  rg_opts = { "rg", "--files", "--hidden", "--no-ignore", "-g", "!.git" },
+})
+local changed_items
+picker.fetch_fn("", function(value, err) assert(not err, err); changed_items = value end)
+assert(vim.wait(5000, function() return changed_items ~= nil end))
+local found_modified, found_ignored = false, false
+for _, item in ipairs(changed_items) do
+  found_modified = found_modified or item.git_status == "modified"
+  found_ignored = found_ignored or item.git_status == "ignored"
+end
+assert(found_modified and found_ignored, "sorting loads Git status with decorations disabled")
+for _, query in ipairs({ "", "lua", "absent-pattern" }) do
+  local normal = normal_filter({ input = query, items = changed_items })
+  local pinned = picker.filter_fn({ input = query, items = changed_items })
+  local changed, other = {}, {}
+  for _, item in ipairs(normal) do
+    if item.git_status == "clean" or item.git_status == "ignored" then
+      other[#other + 1] = item
+    else
+      changed[#changed + 1] = item
+    end
+  end
+  assert(vim.deep_equal(pinned, vim.list_extend(changed, other)),
+    "Git-first keeps normal ranking within both groups, including filtered queries")
+end
+local global = require("minibuffer.config").builtin
+global.git_changed_first = true
+files({ cwd = root, git_changed_first = false, matcher = { frecency = false } })
+assert(vim.deep_equal(picker.filter_fn({ input = "", items = changed_items }),
+  normal_filter({ input = "", items = changed_items })), "false overrides the global option")
+files({ cwd = sibling, matcher = { frecency = false } })
+local outside_items
+picker.fetch_fn("", function(value, err) assert(not err, err); outside_items = value end)
+assert(vim.wait(5000, function() return outside_items ~= nil end))
+assert(#outside_items == 1 and outside_items[1].git_status == "clean")
+assert(picker.filter_fn({ input = "", items = outside_items })[1] == outside_items[1],
+  "non-Git directories retain normal order")
+global.git_changed_first = nil
+assert(not pcall(files, { git_changed_first = "yes" }), "option must be boolean")
 vim.fn.delete(sibling, "rf")
 vim.fn.delete(root, "rf")
 print("standalone files scan/cache, fuzzy ranking, fff layout, Git signs and multi-selection passed")

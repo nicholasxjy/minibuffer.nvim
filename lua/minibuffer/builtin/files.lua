@@ -11,6 +11,7 @@ local ui = require("minibuffer.builtin.files-ui")
 ---@field filename_first? boolean Default true.
 ---@field keymaps? table<string, string|string[]> next, previous, split, vsplit, accept, toggle, toggle_all, close.
 ---@field git? {status_text_color?: boolean}
+---@field git_changed_first? boolean Put Git changes before other matches (default false).
 ---@field show_git_status? boolean
 ---@field hl? table<string,string> fff-style highlight names.
 ---@field current_file_label? string Default "(current)".
@@ -26,6 +27,7 @@ return function(opts)
     filter = { cwd = true },
     git = { status_text_color = false },
     show_git_status = true,
+    git_changed_first = false,
     current_file_label = "(current)",
     fuzzy_query_highlighting = false,
     matcher = {
@@ -48,6 +50,7 @@ return function(opts)
   for _, name in ipairs({
     "filename_first",
     "show_git_status",
+    "git_changed_first",
     "fuzzy_query_highlighting",
   }) do
     vim.validate(name, opts[name], "boolean")
@@ -167,7 +170,7 @@ return function(opts)
       end
       complete()
     end)
-    if opts.show_git_status or opts.git.status_text_color then
+    if opts.show_git_status or opts.git.status_text_color or opts.git_changed_first then
       require("minibuffer.builtin.files-git").load(opts.cwd, function(status)
         git_status = status
         complete()
@@ -223,6 +226,18 @@ return function(opts)
             item.matches[position] = true
           end
         end
+      end
+      if opts.git_changed_first then
+        -- Stable partition after matching: preserve ranking within both groups.
+        local changed, other = {}, {}
+        for _, item in ipairs(result) do
+          local status = item.git_status
+          local group = status and status ~= "clean" and status ~= "ignored"
+              and changed
+            or other
+          group[#group + 1] = item
+        end
+        return vim.list_extend(changed, other)
       end
       return result
     end,

@@ -251,6 +251,7 @@ require("minibuffer.builtin.files")({
   },
   filename_first = true,
   show_git_status = true,
+  git_changed_first = false, -- Put changed Git files before other matches
   git = { status_text_color = false }, -- fff default: color signs only
   fuzzy_query_highlighting = false, -- fff default: highlight literal query
   current_file_label = "(current)",
@@ -274,6 +275,13 @@ and frecency adds `8 * (1 - 1 / (1 + score))`. Visits use a 30-day half-life and
 persist in `stdpath("data")/minibuffer/frecency.json`. `history_bonus` selects the
 history boundary-scoring scheme; it is not another timestamp-based recency score.
 Empty queries also rank by bonuses. All four switches are independent.
+
+Set `git_changed_first = true` to put Git changes (including staged and untracked
+files) before other matching files. Each group retains its normal ranking, for
+both empty and non-empty queries. Ignored files are not promoted. The default
+`false` keeps the normal order; outside a Git repository the order is unchanged.
+This option works even with Git signs and status text colors disabled. It can
+also be set globally through `vim.g.minibuffer.builtin.git_changed_first`.
 
 Layout is input → results → wrapped hints at the bottom. Hints use
 the buffers picker's `FzfLuaHeaderBind` / `FzfLuaHeaderText` groups. Filename-first
