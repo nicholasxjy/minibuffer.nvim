@@ -3,6 +3,7 @@ local Score = require("minibuffer.fuzzy.score")
 ---@class minibuffer.fuzzy.Candidate
 ---@field text string Logical text used for matching
 ---@field path? string Normalized absolute file path
+---@field file? string File field used by Snacks-style queries
 ---@field display? string Formatted text displayed by an adapter
 ---@field idx? integer Original source index
 ---@field score? number Score assigned by the latest rank
@@ -26,6 +27,7 @@ local Score = require("minibuffer.fuzzy.score")
 local Ranker = {}
 Ranker.__index = Ranker
 
+local NORMALIZED_PATH = { normalized = true }
 local DEFAULT_SCORE = 1000
 local SCORE_MATCH = 16
 local SCORE_GAP_START = -3
@@ -39,7 +41,7 @@ local function normalize_path(path)
   return IS_WINDOWS and path:lower() or path
 end
 
-local function prepare_term(opts, pattern)
+local function prepare_term(opts, pattern, snacks)
   local term = { pattern = pattern, fuzzy = opts.fuzzy ~= false, entropy = 0 }
   for _, file_pattern in ipairs({
     "^(.*[/\\].*):(%d*):(%d*)$",
@@ -54,7 +56,7 @@ local function prepare_term(opts, pattern)
       break
     end
   end
-  if not term.field then
+  if snacks or not term.field then
     local field, field_pattern = term.pattern:match("^([%w_][%w_]+):(.*)$")
     if field then
       term.field = field
@@ -114,14 +116,15 @@ local function prepare_term(opts, pattern)
   return term
 end
 
-local function parse_query(opts, query)
+local function parse_query(opts, query, snacks)
   local groups = {}
   local is_or = false
-  for part in query:gmatch("%S+") do
+  local parts = vim.split(query, snacks and " +" or "%s+", { trimempty = true })
+  for _, part in ipairs(parts) do
     if part == "|" then
       is_or = true
     else
-      local term = prepare_term(opts, part)
+      local term = prepare_term(opts, part, snacks)
       if term.pattern ~= "" then
         if is_or and #groups > 0 then
           groups[#groups][#groups[#groups] + 1] = term
@@ -144,7 +147,7 @@ local function parse_query(opts, query)
 end
 
 local function fuzzy_match_greedy(scorer, text, lookup, chars, is_file)
-  local best
+  local best, best_first, best_last
   local first = lookup:find(chars[1], 1, true)
   while first do
     scorer:start(text, first, is_file)
@@ -159,11 +162,14 @@ local function fuzzy_match_greedy(scorer, text, lookup, chars, is_file)
       scorer:update(position)
     end
     if matched and (not best or scorer.value > best) then
-      best = scorer.value
+      best, best_first, best_last = scorer.value, first, position
+    end
+    if not matched then
+      break
     end
     first = lookup:find(chars[1], first + 1, true)
   end
-  return best
+  return best, best_first, best_last
 end
 
 local MAX_DP_CELLS = 4096
@@ -276,33 +282,52 @@ local function exact_match(scorer, text, lookup, term, is_file)
     return not first and DEFAULT_SCORE or nil
   end
   if first then
-    return scorer:get(text, first, last, is_file)
+    return scorer:get(text, first, last, is_file), first, last
   end
 end
 
-local function match_term(scorer, candidate, term)
-  local text = term.field == "file" and candidate.path or candidate[term.field or "text"]
+local function match_term(scorer, candidate, term, cache)
+  local field = term.field or "text"
+  local text = field == "file" and ((cache and candidate.file) or candidate.path)
+    or candidate[field]
   if text == nil then
     return term.inverse and DEFAULT_SCORE or nil
   end
   text = tostring(text)
-  local lookup = term.ignorecase and text:lower() or text
-  if term.fuzzy then
-    local score = fuzzy_match(scorer, text, lookup, term.chars, candidate.path ~= nil)
-    if term.inverse then
-      return not score and DEFAULT_SCORE or nil
+  local lookup = text
+  if term.ignorecase then
+    if cache then
+      local fields = cache[candidate]
+      if not fields then
+        fields = {}
+        cache[candidate] = fields
+      end
+      local value = fields[field]
+      if not value or value.text ~= text then
+        value = { text = text, lower = text:lower() }
+        fields[field] = value
+      end
+      lookup = value.lower
+    else
+      lookup = text:lower()
     end
-    return score
   end
-  return exact_match(scorer, text, lookup, term, candidate.path ~= nil)
+  local is_file = candidate.path ~= nil or candidate.file ~= nil
+  if term.fuzzy then
+    local matcher = cache and fuzzy_match_greedy or fuzzy_match
+    local score, first, last = matcher(scorer, text, lookup, term.chars, is_file)
+    return score, first, last, lookup
+  end
+  local score, first, last = exact_match(scorer, text, lookup, term, is_file)
+  return score, first, last, lookup
 end
 
-local function match_candidate(scorer, candidate, groups)
+local function match_candidate(scorer, candidate, groups, cache)
   local total = 0
   for _, alternatives in ipairs(groups) do
     local score
     for _, term in ipairs(alternatives) do
-      score = match_term(scorer, candidate, term)
+      score = match_term(scorer, candidate, term, cache)
       if score then
         break
       end
@@ -315,7 +340,7 @@ local function match_candidate(scorer, candidate, groups)
   return total
 end
 
-function Ranker.new(opts)
+function Ranker.new(opts, snacks)
   opts = vim.tbl_deep_extend("force", {
     filename_bonus = true,
     cwd_bonus = true,
@@ -328,7 +353,8 @@ function Ranker.new(opts)
   end
   return setmetatable({
     opts = opts,
-    scorer = Score.new(opts),
+    scorer = Score.new(opts, snacks),
+    lookup_cache = snacks and setmetatable({}, { __mode = "k" }) or nil,
     cwd = opts.cwd and normalize_path(opts.cwd) or nil,
     frecency = frecency,
     bonus_cache = setmetatable({}, { __mode = "k" }),
@@ -341,14 +367,21 @@ function Ranker:_bonus(candidate)
   end
   local bonus = 0
   if self.opts.cwd_bonus and self.cwd and candidate.path then
-    local path = normalize_path(candidate.path)
+    -- Files already supplies normalized absolute paths; do not normalize every
+    -- candidate again while opening the picker.
+    local path = self.lookup_cache and candidate.path:gsub("\\", "/")
+      or normalize_path(candidate.path)
+    if IS_WINDOWS then
+      path = path:lower()
+    end
     local prefix = self.cwd:sub(-1) == "/" and self.cwd or self.cwd .. "/"
     if path == self.cwd or path:sub(1, #prefix) == prefix then
       bonus = bonus + 10
     end
   end
   if self.frecency and candidate.path then
-    local value = self.frecency:get(candidate)
+    local value =
+      self.frecency:get(candidate, self.lookup_cache and NORMALIZED_PATH or nil)
     bonus = bonus + (1 - 1 / (1 + value)) * 8
   end
   self.bonus_cache[candidate] = bonus
@@ -357,31 +390,156 @@ end
 
 function Ranker:rank(query, candidates)
   query = vim.trim(query or "")
-  local groups = parse_query(self.opts, query)
-  local ranked = {}
-
-  for index, candidate in ipairs(candidates) do
-    local score = #groups == 0 and DEFAULT_SCORE
-      or match_candidate(self.scorer, candidate, groups)
-    candidate.score = score
-    if score then
-      score = score + self:_bonus(candidate)
-      candidate.idx = candidate.idx or index
-      candidate.score = score
-      ranked[#ranked + 1] = candidate
+  local previous_query = self.query
+  if self.query ~= query then
+    self.query = query
+    self.groups = parse_query(self.opts, query, self.lookup_cache ~= nil)
+  end
+  local groups = self.groups
+  local ranked, matched, buckets, scores = {}, {}, {}, {}
+  local source = candidates
+  if self.lookup_cache then
+    if self.candidates ~= candidates or self.count ~= #candidates then
+      self.ordered = {}
+      local lengths, by_length = {}, {}
+      for index, candidate in ipairs(candidates) do
+        candidate.idx = candidate.idx or index
+        local length = #candidate.text
+        local bucket = by_length[length]
+        if not bucket then
+          bucket = { ordered = true }
+          by_length[length] = bucket
+          lengths[#lengths + 1] = length
+        end
+        if #bucket > 0 and bucket[#bucket].idx > candidate.idx then
+          bucket.ordered = false
+        end
+        bucket[#bucket + 1] = candidate
+      end
+      table.sort(lengths)
+      for _, length in ipairs(lengths) do
+        local bucket = by_length[length]
+        if not bucket.ordered then
+          table.sort(bucket, function(left, right)
+            return left.idx < right.idx
+          end)
+        end
+        for _, candidate in ipairs(bucket) do
+          self.ordered[#self.ordered + 1] = candidate
+        end
+      end
+    end
+    source = self.ordered
+    -- Only simple query extensions are guaranteed to narrow the previous result.
+    if
+      self.candidates == candidates
+      and self.count == #candidates
+      and previous_query
+      and previous_query ~= ""
+      and query:find(previous_query, 1, true) == 1
+      and not query:find("[^%s%w]")
+    then
+      source = self.matched
     end
   end
 
-  table.sort(ranked, function(left, right)
-    if left.score ~= right.score then
-      return left.score > right.score
+  for index, candidate in ipairs(source) do
+    local score = #groups == 0 and DEFAULT_SCORE
+      or match_candidate(self.scorer, candidate, groups, self.lookup_cache)
+    candidate.score = score
+    if score and (not self.lookup_cache or score ~= 0) then
+      score = score + self:_bonus(candidate)
+      candidate.idx = candidate.idx or index
+      candidate.score = score
+      if not self.lookup_cache or score > 0 then
+        if self.lookup_cache then
+          matched[#matched + 1] = candidate
+          local bucket = buckets[score]
+          if not bucket then
+            bucket = {}
+            buckets[score] = bucket
+            scores[#scores + 1] = score
+          end
+          bucket[#bucket + 1] = candidate
+        else
+          ranked[#ranked + 1] = candidate
+        end
+      else
+        candidate.score = nil
+      end
     end
-    if #left.text ~= #right.text then
-      return #left.text < #right.text
+  end
+
+  if self.lookup_cache then
+    -- Match scores repeat heavily. Buckets retain the precomputed text/index
+    -- order, so only distinct scores need sorting on each keystroke.
+    table.sort(scores, function(left, right)
+      return left > right
+    end)
+    for _, score in ipairs(scores) do
+      for _, candidate in ipairs(buckets[score]) do
+        ranked[#ranked + 1] = candidate
+      end
     end
-    return left.idx < right.idx
-  end)
+    self.matched = matched
+  else
+    table.sort(ranked, function(left, right)
+      if left.score ~= right.score then
+        return left.score > right.score
+      end
+      if #left.text ~= #right.text then
+        return #left.text < #right.text
+      end
+      return left.idx < right.idx
+    end)
+  end
+  self.candidates, self.count, self.ranked = candidates, #candidates, ranked
   return ranked
+end
+
+---Return zero-based character positions for the rendered logical file text.
+---Only visible rows need this; ranking does not allocate position arrays.
+function Ranker:positions(query, candidate)
+  query = vim.trim(query or "")
+  local groups = self.query == query and self.groups
+    or parse_query(self.opts, query, self.lookup_cache ~= nil)
+  local bytes = {}
+  for _, alternatives in ipairs(groups) do
+    for _, term in ipairs(alternatives) do
+      if not term.field or term.field == "file" or term.field == "text" then
+        local _, first, last, lookup =
+          match_term(self.scorer, candidate, term, self.lookup_cache)
+        local text = term.field == "file" and (candidate.file or candidate.path)
+          or candidate.text
+        local offset = text and #text - #candidate.text or 0
+        if first and last and text and text:sub(offset + 1) == candidate.text then
+          if term.fuzzy then
+            local position = first
+            bytes[position - offset] = true
+            for i = 2, #term.chars do
+              position = lookup:find(term.chars[i], position + 1, true)
+              bytes[position - offset] = true
+            end
+          else
+            for position = first, last do
+              bytes[position - offset] = true
+            end
+          end
+        end
+      end
+    end
+  end
+  local positions, offset = {}, 1
+  for index, char in ipairs(vim.fn.split(candidate.text, "\\zs")) do
+    for byte = offset, offset + #char - 1 do
+      if bytes[byte] then
+        positions[index - 1] = true
+        break
+      end
+    end
+    offset = offset + #char
+  end
+  return positions
 end
 
 local M = {}
@@ -391,6 +549,12 @@ local M = {}
 ---@return minibuffer.fuzzy.Ranker
 function M.new(opts)
   return Ranker.new(opts)
+end
+
+---Snacks smart scoring for immutable file candidate sets within one invocation.
+---The existing default ranker remains unchanged for other integrations.
+function M.new_snacks(opts)
+  return Ranker.new(opts, true)
 end
 
 return M

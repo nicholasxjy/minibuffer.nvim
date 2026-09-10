@@ -210,3 +210,45 @@ test("empty queries sort by bonuses, length, then source order", function()
     end, ranked)
   )
 end)
+
+test("files matcher follows Snacks gap scoring and extended query positions", function()
+  local ranker =
+    require("minibuffer.fuzzy").new_snacks({ cwd_bonus = false, frecency = false })
+  local cases = {
+    { query = "abc", text = "a_bc", score = 79 },
+    { query = "fb", text = "fooBar.lua", score = 61 },
+    { query = "中文", text = "src/中文.lua", score = 158 },
+    { query = "^src lua$", text = "src/中文.lua", score = 174 },
+  }
+  for _, case in ipairs(cases) do
+    local item = { text = case.text, file = case.text, path = "/repo/" .. case.text }
+    eq(case.score, ranker:rank(case.query, { item })[1].score)
+  end
+  local item =
+    { text = "src/中文.lua", file = "src/中文.lua", path = "/repo/src/中文.lua" }
+  eq(
+    { [0] = true, [1] = true, [2] = true, [7] = true, [8] = true, [9] = true },
+    ranker:positions("^src lua$", item)
+  )
+  eq({ [4] = true, [5] = true }, ranker:positions("中文 !test", item))
+  eq({}, ranker:positions("!test", item))
+end)
+
+test("files query caches preserve ranking when narrowing and broadening", function()
+  local fuzzy = require("minibuffer.fuzzy")
+  local opts = { cwd_bonus = false, frecency = false }
+  local ranker = fuzzy.new_snacks(opts)
+  local items = {
+    { text = "a_bc", idx = 9 },
+    { text = "abc", idx = 3 },
+    { text = "bcd", idx = 2 },
+    { text = "ab", idx = 1 },
+  }
+  for _, query in ipairs({ "", "a", "ab", "abc", "ab", "!a", "a | b", "b", "" }) do
+    local expected = fuzzy.new_snacks(opts):rank(query, vim.deepcopy(items))
+    local result = ranker:rank(query, items)
+    eq(expected, result)
+  end
+  items[#items + 1] = { text = "abacus", idx = 10 }
+  eq(fuzzy.new_snacks(opts):rank("ab", vim.deepcopy(items)), ranker:rank("ab", items))
+end)

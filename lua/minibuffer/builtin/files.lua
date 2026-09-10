@@ -62,10 +62,12 @@ return function(opts)
   vim.validate("filter.cwd", opts.filter.cwd, "boolean")
   opts.cwd = vim.fs.normalize(vim.fn.fnamemodify(opts.cwd or vim.fn.getcwd(), ":p"))
   local current_file = vim.fs.normalize(vim.api.nvim_buf_get_name(0))
-  local ranker = require("minibuffer.fuzzy").new(
+  local ranker = require("minibuffer.fuzzy").new_snacks(
     vim.tbl_extend("force", opts.matcher, { cwd = opts.cwd })
   )
   local keymaps = opts.keymaps
+  local icon = ui.icon_provider()
+  local cwd_prefix = opts.cwd:gsub("/$", "") .. "/"
   local buffers, recent = {}, vim.deepcopy(vim.v.oldfiles)
   for _, info in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
     if info.name ~= "" and vim.bo[info.bufnr].buftype == "" then
@@ -92,13 +94,30 @@ return function(opts)
         return
       end
       vim.schedule(function()
-        local items, seen = {}, {}
-        local function add(path, info, is_recent)
-          path = vim.fs.normalize(path)
+        local items, seen, directory_status = {}, {}, {}
+        local function inherited_status(directory)
+          if directory_status[directory] ~= nil then
+            return directory_status[directory] or nil
+          end
+          local status = git_status[directory]
+          local parent = not status and vim.fs.dirname(directory)
+          if parent and parent ~= directory then
+            status = inherited_status(parent)
+          end
+          directory_status[directory] = status or false
+          return status
+        end
+        local function add(path, info, is_recent, normalized)
+          if not normalized then
+            path = vim.fs.normalize(path)
+          end
           if seen[path] then
             return
           end
-          if opts.filter.cwd and not vim.fs.relpath(opts.cwd, path) then
+          local relative = path:sub(1, #cwd_prefix) == cwd_prefix
+              and path:sub(#cwd_prefix + 1)
+            or vim.fs.relpath(opts.cwd, path)
+          if opts.filter.cwd and not relative then
             return
           end
           if info or is_recent then
@@ -108,35 +127,27 @@ return function(opts)
             end
           end
           seen[path] = true
-          local relative = vim.fs.relpath(opts.cwd, path) or path
-          relative = relative:gsub("\n", "↵"):gsub("\r", "␍"):gsub("\t", "⇥")
-          local directory = vim.fs.dirname(relative) or ""
-          if directory == "." then
-            directory = ""
-          end
+          relative = (relative or path)
+            :gsub("\n", "↵")
+            :gsub("\r", "␍")
+            :gsub("\t", "⇥")
+          local directory, name = relative:match("^(.*)/([^/]+)$")
+          local parent = path:match("^(.*)/")
           local status = git_status[path]
-          if not status then
-            local parent = vim.fs.dirname(path)
-            while parent and parent ~= vim.fs.dirname(parent) do
-              status = git_status[parent]
-              if status then
-                break
-              end
-              parent = vim.fs.dirname(parent)
-            end
-          end
+            or inherited_status(parent == "" and "/" or parent or "/")
           local item = {
             path = path,
             text = relative,
             relative_path = relative,
-            name = vim.fs.basename(relative),
-            directory = directory,
+            file = relative,
+            name = name or relative,
+            directory = directory or "",
             git_status = status or "clean",
             idx = #items + 1,
             info = info,
             recent = is_recent,
           }
-          item.icon, item.icon_hl = ui.icon(item)
+          item.icon, item.icon_hl = icon(item)
           items[#items + 1] = item
         end
         -- Snacks smart combines buffers, recent files and the file finder, in that order.
@@ -146,11 +157,15 @@ return function(opts)
         for _, path in ipairs(recent) do
           add(path, nil, true)
         end
-        for _, path in
-          ipairs(vim.split(file_output, "\0", { plain = true, trimempty = true }))
-        do
+        for path in file_output:gmatch("[^%z]+") do
           local absolute = path:match("^/") or path:match("^%a:[/\\]")
-          add(absolute and path or vim.fs.joinpath(opts.cwd, path))
+          -- rg's ordinary paths are already canonical. Keep normalization for
+          -- custom scan arguments, dot segments, expansion and Windows paths.
+          local normalized = path:sub(1, 1) ~= "."
+            and not path:find("[\\$~]")
+            and not path:find("//", 1, true)
+            and not path:find("/%.%.?/")
+          add(absolute and path or cwd_prefix .. path, nil, nil, normalized)
         end
         ui.prepare(items)
         cache = not failure and items or nil
@@ -217,23 +232,12 @@ return function(opts)
     end,
     filter_fn = function(ctx)
       local result = ranker:rank(ctx.input, ctx.items)
-      for _, item in ipairs(result) do
-        item.matches = nil
-        if opts.fuzzy_query_highlighting and ctx.input ~= "" then
-          local positions = vim.fn.matchfuzzypos({ item.text }, ctx.input)[2][1]
-          item.matches = {}
-          for _, position in ipairs(positions or {}) do
-            item.matches[position] = true
-          end
-        end
-      end
       if opts.git_changed_first then
         -- Stable partition after matching: preserve ranking within both groups.
         local changed, other = {}, {}
         for _, item in ipairs(result) do
           local status = item.git_status
-          local group = status and status ~= "clean" and status ~= "ignored"
-              and changed
+          local group = status and status ~= "clean" and status ~= "ignored" and changed
             or other
           group[#group + 1] = item
         end
@@ -242,6 +246,10 @@ return function(opts)
       return result
     end,
     format_fn = function(item, ctx)
+      if opts.fuzzy_query_highlighting and item._match_query ~= ctx.input then
+        item._match_query = ctx.input
+        item.matches = ranker:positions(ctx.input, item)
+      end
       return ui.format(item, ctx, opts, current_file)
     end,
     on_change = function()

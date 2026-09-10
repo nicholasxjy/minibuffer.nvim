@@ -67,9 +67,10 @@ local function compute_bonus(self, previous, current)
   return 0
 end
 
-function Score.new(opts)
+function Score.new(opts, snacks)
   local self = setmetatable({}, Score)
   self.opts = opts or {}
+  self.snacks = snacks == true
   self.path_separator = self.opts.path_separator or package.config:sub(1, 1)
   self.boundary_white = self.opts.history_bonus and BONUS_BOUNDARY or BONUS_BOUNDARY + 2
   self.boundary_delimiter = self.opts.history_bonus and BONUS_BOUNDARY
@@ -113,9 +114,9 @@ function Score:update(position)
     self.previous_class = CHAR_CLASS[self.text:byte(position - 1)] or CHAR_NONWORD
     bonus = self.bonuses[self.previous_class][class]
     self.value = self.value + SCORE_GAP_START + (gap - 1) * SCORE_GAP_EXTENSION
-    -- The first match after a gap starts a new consecutive chunk.
-    self.consecutive = 1
-    self.first_bonus = bonus
+    -- Snacks resets the run after a gap; the optimal matcher starts a new chunk.
+    self.consecutive = self.snacks and 0 or 1
+    self.first_bonus = self.snacks and 0 or bonus
   else
     bonus = self.bonuses[self.previous_class][class]
     if self.consecutive == 0 then
@@ -139,8 +140,7 @@ end
 
 function Score:bonus_at(text, position)
   local class = CHAR_CLASS[text:byte(position)] or CHAR_NONWORD
-  local previous = position > 1
-      and (CHAR_CLASS[text:byte(position - 1)] or CHAR_NONWORD)
+  local previous = position > 1 and (CHAR_CLASS[text:byte(position - 1)] or CHAR_NONWORD)
     or CHAR_WHITE
   return self.bonuses[previous][class]
 end

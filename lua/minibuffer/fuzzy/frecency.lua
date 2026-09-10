@@ -76,7 +76,7 @@ end
 
 function Frecency:get(candidate, opts)
   opts = opts or {}
-  local path = normalize(candidate.path)
+  local path = opts.normalized and candidate.path or normalize(candidate.path)
   if not path then
     return 0
   end

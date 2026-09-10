@@ -269,12 +269,24 @@ require("minibuffer.builtin.files")({
 })
 ```
 
-Scoring follows [Snacks smart](https://github.com/folke/snacks.nvim/blob/main/lua/snacks/picker/config/sources.lua)
+Scoring follows [Snacks smart](https://github.com/folke/snacks.nvim/blob/882c996cf28183f4d63640de0b4c02ec886d01f2/lua/snacks/picker/config/sources.lua)
 and its matcher: filename matches receive the filename bonus, cwd matches add 10,
 and frecency adds `8 * (1 - 1 / (1 + score))`. Visits use a 30-day half-life and
 persist in `stdpath("data")/minibuffer/frecency.json`. `history_bonus` selects the
 history boundary-scoring scheme; it is not another timestamp-based recency score.
 Empty queries also rank by bonuses. All four switches are independent.
+
+Files uses Snacks' forward-scan matcher and gap scoring, with the same score,
+text-length, and source-index tie breaks. Queries support smartcase, whitespace
+AND, `|` OR, `!` exclusion, `'` exact/word matching, `^`/`$` anchors, and file
+fields. Fuzzy highlights use those same matches and are calculated only for
+visible rows. This does not change the matcher used by the fzf integration or
+replace the existing minibuffer frecency store.
+
+Within one invocation, lowercase text, tie ordering, and directory status are
+cached; simple query extensions only recheck previous matches. Each new
+invocation still refreshes files and Git status. See
+[files algorithm validation and benchmarks](doc/files-performance.md).
 
 Set `git_changed_first = true` to put Git changes (including staged and untracked
 files) before other matching files. Each group retains its normal ranking, for

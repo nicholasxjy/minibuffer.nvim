@@ -3,11 +3,21 @@ vim.opt.rtp:prepend(".")
 package.loaded["vim._core.ui2"] = { cmdheight = 1 }
 package.loaded["minibuffer.internal.guard"] = { check = function() end }
 for _, name in ipairs({ "fzf-lua", "fff", "snacks" }) do
-  package.preload[name] = function() error("files must be standalone") end
+  package.preload[name] = function()
+    error("files must be standalone")
+  end
 end
-package.loaded["nvim-web-devicons"] = { get_icon = function() return "界", "Type" end }
+package.loaded["nvim-web-devicons"] = {
+  get_icon = function()
+    return "界", "Type"
+  end,
+}
 local picker
-package.loaded["minibuffer"] = { select = function(opts) picker = opts end }
+package.loaded["minibuffer"] = {
+  select = function(opts)
+    picker = opts
+  end,
+}
 local files = require("minibuffer.builtin.files")
 local ui = require("minibuffer.builtin.files-ui")
 local root = vim.fn.tempname()
@@ -19,14 +29,24 @@ local function git(...)
   assert(res.code == 0, res.stderr)
   return res.stdout
 end
-local function write(path, text) vim.fn.writefile({ text }, root .. "/" .. path) end
+local function write(path, text)
+  vim.fn.writefile({ text }, root .. "/" .. path)
+end
 git("init", "-q")
 write("src/中文.lua", "original")
 write("deleted.lua", "original")
 write("rename.lua", "original")
 write(".gitignore", "ignored/")
 git("add", ".")
-git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture")
+git(
+  "-c",
+  "user.name=Test",
+  "-c",
+  "user.email=test@example.com",
+  "commit",
+  "-qm",
+  "fixture"
+)
 write("src/中文.lua", "modified")
 vim.fn.delete(root .. "/deleted.lua")
 git("mv", "rename.lua", "renamed.lua")
@@ -38,12 +58,22 @@ vim.fn.mkdir(root .. "/ignored", "p")
 write("ignored/cache.lua", "ignored")
 files({ cwd = root, matcher = { frecency = false }, git = { status_text_color = true } })
 local all, second
-picker.fetch_fn("", function(items, err) assert(not err, err); all = items end)
-picker.fetch_fn("x", function(items, err) assert(not err, err); second = items end)
-assert(vim.wait(5000, function() return all ~= nil and second ~= nil end))
+picker.fetch_fn("", function(items, err)
+  assert(not err, err)
+  all = items
+end)
+picker.fetch_fn("x", function(items, err)
+  assert(not err, err)
+  second = items
+end)
+assert(vim.wait(5000, function()
+  return all ~= nil and second ~= nil
+end))
 assert(all == second, "concurrent fetches share one completed scan")
 local by_path = {}
-for _, item in ipairs(all) do by_path[item.path] = item end
+for _, item in ipairs(all) do
+  by_path[item.path] = item
+end
 assert(by_path[root .. "/src/中文.lua"].git_status == "modified")
 assert(by_path[root .. "/new.lua"].git_status == "staged_new")
 assert(by_path[root .. "/space name.lua"].git_status == "untracked")
@@ -51,18 +81,30 @@ assert(by_path[root .. "/line\nbreak.lua"].name == "line↵break.lua")
 assert(not by_path[root .. "/ignored/cache.lua"])
 assert(not by_path[root .. "/deleted.lua"])
 local statuses = require("minibuffer.builtin.files-git").parse(
-  " D deleted.lua\0R  renamed.lua\0old name.lua\0?? space name.lua\0 M work.lua\0A  new.lua\0", root)
+  " D deleted.lua\0R  renamed.lua\0old name.lua\0?? space name.lua\0 M work.lua\0A  new.lua\0",
+  root
+)
 assert(statuses[root .. "/deleted.lua"] == "deleted")
-assert(statuses[root .. "/space name.lua"] == "untracked", "rename source is consumed separately")
+assert(
+  statuses[root .. "/space name.lua"] == "untracked",
+  "rename source is consumed separately"
+)
 assert(statuses[root .. "/work.lua"] == "modified")
 local matched = picker.filter_fn({ input = "中文", items = all })
 assert(#matched == 1 and matched[1].name == "中文.lua")
 local util = require("minibuffer.internal.util")
 local cmd_buf = vim.api.nvim_create_buf(false, true)
 local cmd_win = vim.api.nvim_open_win(cmd_buf, false, {
-  relative = "editor", row = 0, col = 0, width = 80, height = 1, style = "minimal",
+  relative = "editor",
+  row = 0,
+  col = 0,
+  width = 80,
+  height = 1,
+  style = "minimal",
 })
-util.get_cmd_win = function() return cmd_win end
+util.get_cmd_win = function()
+  return cmd_win
+end
 util.wipe_cmd_buffer = function() end
 util.set_cmdheight = function() end
 local sess = require("minibuffer.sessions.select").new(picker)
@@ -74,27 +116,45 @@ local body = vim.api.nvim_buf_get_lines(sess._display.buf, 0, -1, false)
 local row = 0
 assert(body[row + 1]:match("^界 中文%.lua +│ src$"), body[row + 1])
 assert(body[#body - sess._header_height + 1]:find("::", 1, true), "hints follow the list")
-assert(vim.api.nvim_win_get_position(sess._entry.win)[1] + 1
-  == vim.api.nvim_win_get_position(sess._display.win)[1])
-local marks = vim.api.nvim_buf_get_extmarks(sess._display.buf,
-  require("minibuffer.internal.state").ns, 0, -1, { details = true })
+assert(
+  vim.api.nvim_win_get_position(sess._entry.win)[1] + 1
+    == vim.api.nvim_win_get_position(sess._display.win)[1]
+)
+local marks = vim.api.nvim_buf_get_extmarks(
+  sess._display.buf,
+  require("minibuffer.internal.state").ns,
+  0,
+  -1,
+  { details = true }
+)
 local groups, sign = {}, nil
 for _, mark in ipairs(marks) do
   if mark[2] == row then
     local detail = mark[4]
-    if detail.hl_group then groups[detail.hl_group] = true end
-    if detail.sign_text then sign = detail.sign_text end
+    if detail.hl_group then
+      groups[detail.hl_group] = true
+    end
+    if detail.sign_text then
+      sign = detail.sign_text
+    end
   end
 end
 assert(groups.IncSearch and groups.Comment and groups.FFFGitModified)
 assert(sign and sign:find("┃", 1, true), "fff git border sign")
 sess._selected_indices = { 1 }
 sess:render()
-marks = vim.api.nvim_buf_get_extmarks(sess._display.buf,
-  require("minibuffer.internal.state").ns, 0, -1, { details = true })
+marks = vim.api.nvim_buf_get_extmarks(
+  sess._display.buf,
+  require("minibuffer.internal.state").ns,
+  0,
+  -1,
+  { details = true }
+)
 local selected = false
 for _, mark in ipairs(marks) do
-  if mark[4].sign_hl_group == "FFFSelectedActive" then selected = true end
+  if mark[4].sign_hl_group == "FFFSelectedActive" then
+    selected = true
+  end
 end
 assert(selected, "fff selection replaces the git border")
 assert(ui.shorten("alpha/beta/gamma/delta/omega", 15) == "alpha/.../omega")
@@ -103,7 +163,9 @@ vim.api.nvim_set_hl(0, "FFFGitModified", { fg = "#123456" })
 ui.setup()
 assert(vim.api.nvim_get_hl(0, { name = "FFFGitModified" }).fg == 0x123456)
 picker.on_accept({ { item = by_path[root .. "/space name.lua"] }, { item = matched[1] } })
-assert(vim.api.nvim_buf_get_name(vim.fn.getqflist()[1].bufnr) == root .. "/space name.lua")
+assert(
+  vim.api.nvim_buf_get_name(vim.fn.getqflist()[1].bufnr) == root .. "/space name.lua"
+)
 git("status", "--porcelain") -- fixture is still intact after browsing
 local sibling = root .. "-sibling"
 vim.fn.mkdir(sibling, "p")
@@ -111,27 +173,49 @@ vim.fn.writefile({ "outside" }, sibling .. "/outside.lua")
 local outside = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_buf_set_name(outside, sibling .. "/outside.lua")
 local function scan(filter)
-  files({ cwd = root, filter = { cwd = filter }, matcher = { frecency = false },
-    keymaps = { next = { "<C-j>", "<Down>" }, previous = { "<C-k>", "<Up>" },
-      split = { "<C-s>", "<C-w>s" }, vsplit = {}, accept = { "<CR>", "<C-l>" },
-      toggle = { "<C-x>", "<M-x>" }, toggle_all = {}, close = { "<Esc>", "<C-q>" } },
+  files({
+    cwd = root,
+    filter = { cwd = filter },
+    matcher = { frecency = false },
+    keymaps = {
+      next = { "<C-j>", "<Down>" },
+      previous = { "<C-k>", "<Up>" },
+      split = { "<C-s>", "<C-w>s" },
+      vsplit = {},
+      accept = { "<CR>", "<C-l>" },
+      toggle = { "<C-x>", "<M-x>" },
+      toggle_all = {},
+      close = { "<Esc>", "<C-q>" },
+    },
   })
   local result
-  picker.fetch_fn("", function(value, err) assert(not err, err); result = value end)
-  assert(vim.wait(5000, function() return result ~= nil end))
+  picker.fetch_fn("", function(value, err)
+    assert(not err, err)
+    result = value
+  end)
+  assert(vim.wait(5000, function()
+    return result ~= nil
+  end))
   return result
 end
 for _, item in ipairs(scan(true)) do
-  assert(vim.fs.relpath(root, item.path), "cwd excludes sibling directories and outside buffers")
+  assert(
+    vim.fs.relpath(root, item.path),
+    "cwd excludes sibling directories and outside buffers"
+  )
 end
 local unrestricted = scan(false)
-assert(vim.iter(unrestricted):any(function(item) return item.path == sibling .. "/outside.lua" end))
+assert(vim.iter(unrestricted):any(function(item)
+  return item.path == sibling .. "/outside.lua"
+end))
 local configured = require("minibuffer.sessions.select").new(picker)
 configured:pre_start()
 configured._items = unrestricted
 local keys = {}
 util.create_condition_keyset = function()
-  return function(_, key, cb) keys[key] = cb end
+  return function(_, key, cb)
+    keys[key] = cb
+  end
 end
 configured:post_start()
 assert(keys["<C-j>"] and keys["<Down>"] and keys["<C-k>"] and keys["<Up>"])
@@ -144,33 +228,54 @@ assert(configured._current_index == 1)
 local separator_col
 for _, item in ipairs(unrestricted) do
   local text = ""
-  for _, chunk in ipairs(picker.format_fn(item, { input = "" })) do text = text .. chunk.text end
+  for _, chunk in ipairs(picker.format_fn(item, { input = "" })) do
+    text = text .. chunk.text
+  end
   local first = assert(text:find("│", 1, true))
   local col = vim.fn.strdisplaywidth(text:sub(1, first - 1))
-  assert(not separator_col or col == separator_col, "filename-first separators align across Unicode paths")
+  assert(
+    not separator_col or col == separator_col,
+    "filename-first separators align across Unicode paths"
+  )
   separator_col = col
 end
 local hint = ""
-for _, line in ipairs(picker.header_fn({ items = unrestricted, selected_indices = {} }, 120)) do
-  for _, chunk in ipairs(line) do hint = hint .. chunk.text end
+for _, line in
+  ipairs(picker.header_fn({ items = unrestricted, selected_indices = {} }, 120))
+do
+  for _, chunk in ipairs(line) do
+    hint = hint .. chunk.text
+  end
 end
 assert(hint:find("ctrl-s/ctrl-w s", 1, true))
 assert(not hint:find("vsplit", 1, true) and not hint:find("toggle-all", 1, true))
 -- Git-first ordering is independent of decorations and preserves each group's rank.
 local normal_filter = picker.filter_fn
-files({ cwd = root, git_changed_first = true, show_git_status = false,
-  git = { status_text_color = false }, matcher = { frecency = false },
+files({
+  cwd = root,
+  git_changed_first = true,
+  show_git_status = false,
+  git = { status_text_color = false },
+  matcher = { frecency = false },
   rg_opts = { "rg", "--files", "--hidden", "--no-ignore", "-g", "!.git" },
 })
 local changed_items
-picker.fetch_fn("", function(value, err) assert(not err, err); changed_items = value end)
-assert(vim.wait(5000, function() return changed_items ~= nil end))
+picker.fetch_fn("", function(value, err)
+  assert(not err, err)
+  changed_items = value
+end)
+assert(vim.wait(5000, function()
+  return changed_items ~= nil
+end))
 local found_modified, found_ignored = false, false
 for _, item in ipairs(changed_items) do
   found_modified = found_modified or item.git_status == "modified"
   found_ignored = found_ignored or item.git_status == "ignored"
 end
-assert(found_modified and found_ignored, "sorting loads Git status with decorations disabled")
+assert(
+  found_modified and found_ignored,
+  "sorting loads Git status with decorations disabled"
+)
 for _, query in ipairs({ "", "lua", "absent-pattern" }) do
   local normal = normal_filter({ input = query, items = changed_items })
   local pinned = picker.filter_fn({ input = query, items = changed_items })
@@ -182,23 +287,60 @@ for _, query in ipairs({ "", "lua", "absent-pattern" }) do
       changed[#changed + 1] = item
     end
   end
-  assert(vim.deep_equal(pinned, vim.list_extend(changed, other)),
-    "Git-first keeps normal ranking within both groups, including filtered queries")
+  assert(
+    vim.deep_equal(pinned, vim.list_extend(changed, other)),
+    "Git-first keeps normal ranking within both groups, including filtered queries"
+  )
 end
 local global = require("minibuffer.config").builtin
 global.git_changed_first = true
 files({ cwd = root, git_changed_first = false, matcher = { frecency = false } })
-assert(vim.deep_equal(picker.filter_fn({ input = "", items = changed_items }),
-  normal_filter({ input = "", items = changed_items })), "false overrides the global option")
+assert(
+  vim.deep_equal(
+    picker.filter_fn({ input = "", items = changed_items }),
+    normal_filter({ input = "", items = changed_items })
+  ),
+  "false overrides the global option"
+)
 files({ cwd = sibling, matcher = { frecency = false } })
 local outside_items
-picker.fetch_fn("", function(value, err) assert(not err, err); outside_items = value end)
-assert(vim.wait(5000, function() return outside_items ~= nil end))
+picker.fetch_fn("", function(value, err)
+  assert(not err, err)
+  outside_items = value
+end)
+assert(vim.wait(5000, function()
+  return outside_items ~= nil
+end))
 assert(#outside_items == 1 and outside_items[1].git_status == "clean")
-assert(picker.filter_fn({ input = "", items = outside_items })[1] == outside_items[1],
-  "non-Git directories retain normal order")
+assert(
+  picker.filter_fn({ input = "", items = outside_items })[1] == outside_items[1],
+  "non-Git directories retain normal order"
+)
 global.git_changed_first = nil
 assert(not pcall(files, { git_changed_first = "yes" }), "option must be boolean")
+-- Fuzzy highlight work is lazy and uses the same extended matcher as ranking.
+files({ cwd = root, matcher = { frecency = false }, fuzzy_query_highlighting = true })
+local fuzzy_positions = vim.fn.matchfuzzypos
+vim.fn.matchfuzzypos = function()
+  error("files must not run a second fuzzy algorithm")
+end
+local hits = picker.filter_fn({ input = "^src lua$", items = all })
+assert(#hits == 1 and not hits[1].matches, "ranking does not prepare highlight masks")
+picker.format_fn(
+  hits[1],
+  { input = "^src lua$", current_index = 1, selected_indices = {} },
+  1
+)
+assert(hits[1].matches[0] and hits[1].matches[7] and not hits[1].matches[4])
+picker.format_fn(
+  hits[1],
+  { input = "中文", current_index = 1, selected_indices = {} },
+  1
+)
+assert(hits[1].matches[4] and hits[1].matches[5] and not hits[1].matches[0])
+vim.fn.matchfuzzypos = fuzzy_positions
 vim.fn.delete(sibling, "rf")
 vim.fn.delete(root, "rf")
-print("standalone files scan/cache, fuzzy ranking, fff layout, Git signs and multi-selection passed")
+print(
+  "standalone files scan/cache, fuzzy ranking, fff layout, Git signs and multi-selection passed"
+)
