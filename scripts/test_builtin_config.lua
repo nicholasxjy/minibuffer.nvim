@@ -3,11 +3,15 @@ vim.opt.rtp:prepend(".")
 vim.g.minibuffer = {
   select = { keymaps = { next = { "<Down>" } } },
   builtin = {
+    prompt = "Search> ",
+    pointer = "界",
     filename_first = false,
     filter = { cwd = true },
     max_height = 9,
     keymaps = { split = { "<M-s>" }, accept = { "<M-a>" }, toggle_all = {} },
     highlights = {
+      prompt = "TestPrompt",
+      pointer = "TestPointer",
       normal = "TestNormal",
       directory_path = "TestDir",
       matched = "TestMatch",
@@ -53,6 +57,10 @@ for _, bad in ipairs({
   { keymaps = { split = false } },
   { highlights = { normal = false } },
   { max_height = 0 },
+  { prompt = false },
+  { prompt = "bad\nprompt" },
+  { pointer = 1 },
+  { pointer = "\t" },
 }) do
   assert(not pcall(common.resolve, bad), vim.inspect(bad))
 end
@@ -71,6 +79,21 @@ assert(
   "global cwd filter excludes sibling paths"
 )
 assert(picker.max_height == 9 and picker.highlights.normal == "TestNormal")
+assert(picker.prompt == "Search> " and picker.highlights.prompt == "TestPrompt")
+local active = picker.format_fn(items[1], { current_index = 1, selected_indices = {} }, 1)
+assert(active[1].text == "界" and active[1].hl[1] == "TestPointer")
+local inactive = picker.format_fn(items[1], { current_index = 0, selected_indices = {} }, 1)
+assert(inactive[1].text == "  " and inactive[1].hl == "TestPointer")
+require("minibuffer.builtin.buffers")({
+  prompt = "Local> ", pointer = "→", highlights = { prompt = "LocalPrompt", pointer = "LocalPointer" },
+})
+assert(picker.prompt == "Local> " and picker.highlights.prompt == "LocalPrompt")
+active = picker.format_fn(items[1], { current_index = 1, selected_indices = {} }, 1)
+assert(active[1].text == "→" and active[1].hl[1] == "LocalPointer")
+require("minibuffer.builtin.buffers")({ prompt = "", pointer = "" })
+assert(picker.prompt == "")
+active = picker.format_fn(items[1], { current_index = 1, selected_indices = {} }, 1)
+assert(active[1].text == "")
 local chunks = picker.format_fn(items[1], { current_index = 0, selected_indices = {} }, 1)
 assert(vim.iter(chunks):any(function(chunk)
   return chunk.hl == "TestDir"
@@ -85,6 +108,8 @@ require("minibuffer.builtin.live-grep")("TODO")
 assert(picker.query == "TODO" and picker.max_height == 9)
 chunks = picker.group_fn({ file = "src/inside.lua" })
 assert(chunks[3].text == "src/" and chunks[3].hl == "TestDir")
+local grep_row = { line = 1, col = 1, location_width = 3, text = "text", matches = {} }
+assert(picker.format_fn(grep_row, { current_index = 1, selected_indices = {} }, 1)[1].text == "界")
 local bindings = {}
 local grep_ui = require("minibuffer.builtin.live-grep-ui")
 grep_ui.info = function() end
@@ -97,6 +122,8 @@ require("minibuffer.builtin.history")()
 assert(picker.keymaps.accept[1] == "<M-a>" and picker.highlights.normal == "TestNormal")
 require("minibuffer.builtin.ui_select")({ "item" }, {}, function() end)
 assert(picker.max_height == 9 and picker.keymaps.accept[1] == "<M-a>")
+local plain = picker.format_fn("item", { current_index = 1 }, 1)
+assert(plain[1].text == "界 " and plain[1].hl == "TestPointer")
 
 local util = require("minibuffer.internal.util")
 local command_buffer = vim.api.nvim_create_buf(false, true)

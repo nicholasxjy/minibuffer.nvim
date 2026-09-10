@@ -42,10 +42,12 @@
 ---@field toggle_all? string|string[]
 
 ---@class minibuffer.builtin.Opts
+---@field prompt? string Input prefix; empty string hides it. Defaults to the picker prompt.
+---@field pointer? string Current-row icon; empty string hides it. Defaults to the picker icon.
 ---@field filename_first? boolean
 ---@field filter? { cwd?: boolean } Restrict file-backed candidates to cwd.
 ---@field keymaps? table<string, string|string[]> Empty lists disable actions.
----@field highlights? table<string, string> Session highlight groups.
+---@field highlights? table<string, string> Session highlight groups; prompt and pointer style the input prefix and current-row icon.
 ---@field hl? table<string, string> Files row highlight groups (fff-style names).
 ---@field dynamic_height? boolean
 ---@field max_height? integer

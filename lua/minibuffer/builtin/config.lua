@@ -71,9 +71,31 @@ function M.select(opts, session)
   session.keymaps = opts.keymaps
   session.highlights =
     vim.tbl_extend("force", {}, session.highlights or {}, opts.highlights)
-  for _, key in ipairs({ "dynamic_height", "max_height", "prompt_position" }) do
+  for _, key in ipairs({ "dynamic_height", "max_height", "prompt_position", "prompt" }) do
     if opts[key] ~= nil then
       session[key] = opts[key]
+    end
+  end
+  if opts.pointer ~= nil and session.format_fn then
+    local render = session.format_fn
+    local function is_pointer(group)
+      if type(group) == "table" then
+        for _, child in ipairs(group) do
+          if is_pointer(child) then return true end
+        end
+      end
+      return group == "FzfLuaFzfPointer"
+    end
+    session.format_fn = function(item, ctx, index)
+      local chunks = vim.deepcopy(render(item, ctx, index))
+      local text = ctx and ctx.current_index == index and opts.pointer
+        or string.rep(" ", vim.fn.strdisplaywidth(opts.pointer))
+      if chunks[1] and is_pointer(chunks[1].hl) then
+        chunks[1].text = text
+      elseif opts.pointer ~= "" then
+        table.insert(chunks, 1, { text = text .. " ", hl = "FzfLuaFzfPointer" })
+      end
+      return chunks
     end
   end
   local function highlight(group)

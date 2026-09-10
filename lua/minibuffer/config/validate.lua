@@ -4,6 +4,11 @@ function M.validate_builtin(opts)
   if type(opts) ~= "table" then
     return false, "builtin: expected table"
   end
+  for _, key in ipairs({ "prompt", "pointer" }) do
+    if opts[key] ~= nil and (type(opts[key]) ~= "string" or opts[key]:find("[%c]")) then
+      return false, "builtin." .. key .. ": expected single-line text without control characters"
+    end
+  end
   for _, key in ipairs({ "filename_first", "dynamic_height" }) do
     if opts[key] ~= nil and type(opts[key]) ~= "boolean" then
       return false, "builtin." .. key .. ": expected boolean"

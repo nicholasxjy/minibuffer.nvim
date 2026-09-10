@@ -110,6 +110,30 @@ vim.g.minibuffer = {
 
 # Builtin
 
+Customize the input prefix and current-row icon globally or per picker:
+
+```lua
+vim.g.minibuffer = {
+  builtin = {
+    prompt = "Search> ",
+    pointer = "❯",
+    highlights = { prompt = "Question", pointer = "Special" },
+  },
+}
+
+require("minibuffer.builtin.buffers")({
+  prompt = "Buffers: ",
+  pointer = "→",
+  highlights = { prompt = "Title", pointer = "DiagnosticWarn" },
+})
+```
+
+Call options override global defaults. Omit `prompt` or `pointer` to keep the
+picker's default; set either to `""` to hide it. Inactive rows reserve the icon's
+display width, including wide Unicode icons. Setting `pointer` also adds an icon
+to pickers that have none by default. Use `highlights.prompt` and
+`highlights.pointer` to set their highlight groups independently.
+
 Shared builtin options live in `vim.g.minibuffer.builtin` (set before loading
 the plugin). Each invocation can override them; nested maps merge by field,
 while key lists replace the inherited list and `{}` disables an action.

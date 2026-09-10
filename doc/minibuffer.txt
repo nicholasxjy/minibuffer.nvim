@@ -239,6 +239,12 @@ minibuffer.builtin.Opts                              *minibuffer.builtin.Opts*
     back to select.keymaps. Unspecified highlights/layout retain picker defaults.
 
     Fields: ~
+        {prompt?}          (string) Input prefix; defaults to the picker prompt.
+        {pointer?}         (string) Current-row icon; defaults to the picker icon.
+                           Empty strings hide either field. Use highlights.prompt
+                           and highlights.pointer for their highlight groups.
+                           Explicit pointer adds an icon to rows without one;
+                           inactive rows reserve its Unicode display width.
         {filename_first?}  (boolean) Filename before directory; default true.
         {filter?}          ({cwd?:boolean}) Restrict files, buffers, oldfiles and
                            diagnostics to cwd. Files default true, others false.
